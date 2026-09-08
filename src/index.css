@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: #f0f4f8;
+  --color-surface: #ffffff;
+  --color-surface-container-low: #f8fafc;
+  --color-surface-container: #f1f5f9;
+  --color-surface-container-high: #e2e8f0;
+  --color-on-surface: #0f172a;
+  --color-on-surface-variant: #475569;
+  --color-outline: #94a3b8;
+  --color-outline-variant: #cbd5e1;
+  --color-primary: #006699;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #dbeafe;
+  --color-on-primary-container: #004466;
+  --color-secondary: #0369a1;
+  --color-ink3: #64748b;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-primary);
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-surface-container-low border border-outline-variant/60 backdrop-blur-xl rounded-xl;
+  }
+
+  .glass-btn {
+    @apply px-[18px] py-2.5 bg-primary text-on-primary font-bold uppercase tracking-wider text-[11px]
+      rounded-full inline-flex items-center gap-1.5 transition-shadow duration-150;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  }
+  .glass-btn:hover {
+    box-shadow: 0 4px 14px rgba(0, 102, 153, 0.2);
+  }
+  .glass-btn:active {
+    transform: scale(0.97);
+  }
+
+  .glass-btn-outline {
+    @apply px-[18px] py-2.5 bg-surface-container text-on-surface font-bold uppercase tracking-wider text-[11px]
+      rounded-full border border-outline-variant transition-colors duration-150;
+  }
+  .glass-btn-outline:hover {
+    @apply bg-surface-container-high;
+  }
+
+  .link-btn {
+    @apply bg-transparent border-none p-0 font-sans cursor-pointer text-secondary;
+  }
+  .link-btn:hover {
+    @apply text-primary underline;
+  }
+
+  .section-nav-card {
+    @apply relative flex items-start gap-3 p-3.5 rounded-2xl bg-surface-container-low
+      border border-outline-variant text-left w-full transition-all duration-200;
+    border-left: 3px solid transparent;
+  }
+  .section-nav-card:hover {
+    transform: translateY(-1px);
+    border-left-color: rgba(3, 105, 161, 0.35);
+  }
+  .section-nav-card.active {
+    @apply bg-primary-container;
+    border-left-color: var(--color-secondary);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  }
+
+  .chip {
+    @apply px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wide cursor-pointer
+      border border-outline-variant bg-surface-container text-on-surface-variant inline-flex items-center gap-1.5;
+  }
+  .chip.active {
+    @apply bg-secondary border-secondary text-white;
+  }
+  .chip.locked {
+    @apply opacity-55 cursor-not-allowed;
+  }
+
+  .field-row {
+    @apply grid gap-4 items-center py-4 border-b border-outline-variant last:border-b-0;
+    grid-template-columns: 220px 1fr auto;
+  }
+}
+
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+  50% { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
+}
+.dot-complete {
+  animation: dotPulse 1.8s ease 2;
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.panel-enter {
+  animation: panelIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.status-pulse {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+.scrollarea::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollarea::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 10px;
+}
