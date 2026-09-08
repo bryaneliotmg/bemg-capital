@@ -30,6 +30,12 @@ function mmddyyyyToIso(value: string | undefined | null): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function parseAward(value: unknown): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
@@ -75,17 +81,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const detail = detailJson?.data ?? {};
 
         // Grants.gov nests rich fields under `synopsis` for posted opportunities or
-        // `forecast` for forecasted ones — field names beyond what we confirmed live
-        // (forecastDesc) are a best-effort read; raw_detail keeps the full response
-        // so nothing is lost if a field name here turns out to be slightly off.
+        // `forecast` for forecasted ones. Confirmed against a real fetchOpportunity
+        // response: applicantTypes entries are {id, description} (id = the facet
+        // code, e.g. "23" for Small businesses) and awardFloor/awardCeiling are
+        // either numeric strings or the literal string "none".
         const detailSource = detail.synopsis ?? detail.forecast ?? {};
         const description: string = detailSource.synopsisDesc ?? detailSource.forecastDesc ?? '';
-        const awardFloor = detailSource.awardFloor != null ? Number(detailSource.awardFloor) : null;
-        const awardCeiling = detailSource.awardCeiling != null ? Number(detailSource.awardCeiling) : null;
+        const awardFloor = parseAward(detailSource.awardFloor);
+        const awardCeiling = parseAward(detailSource.awardCeiling);
         const eligibilityCodes: string[] = Array.isArray(detailSource.applicantTypes)
-          ? detailSource.applicantTypes.map((a: unknown) =>
-              typeof a === 'string' ? a : String((a as { code?: string })?.code ?? ''),
-            )
+          ? detailSource.applicantTypes
+              .map((a: unknown) => (typeof a === 'string' ? a : String((a as { id?: string })?.id ?? '')))
+              .filter((code: string) => code.length > 0)
           : [];
 
         const { error } = await supabase.from('funding_opportunities').upsert({
