@@ -2,5 +2,9 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "functions": {
+    "api/cron/sync-grants.ts": { "maxDuration": 60 }
+  },
+  "crons": [{ "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" }],
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }
