@@ -100,6 +100,11 @@ export const IDENTITY_FIELDS: DnaField[] = [
   { label: 'Service Area', value: 'National', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
   { label: 'Headquarters City', value: 'Not yet provided', status: 'required', sourceLabel: 'No city on file — add to unlock location-based programs' },
   { label: 'Ownership Structure', value: 'Not yet provided', status: 'required', sourceLabel: 'Entity type/ownership not recorded yet' },
+  { label: 'Authorized Representative', value: 'Bryan Willis', status: 'verified', sourceLabel: 'bemg-platform company profile · founder listed' },
+  { label: 'Contact Email', value: 'bryan@bemgbusiness.com', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'Contact Phone', value: '+1 (601) 331-6132', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'EIN / Tax ID', value: 'Not yet provided', status: 'required', sourceLabel: 'Required for federal grant applications' },
+  { label: 'SAM.gov Unique Entity ID (UEI)', value: 'Not yet provided', status: 'required', sourceLabel: 'Register at SAM.gov — required before applying to any federal grant' },
 ];
 
 export const FINANCIAL_FIELDS: DnaField[] = [

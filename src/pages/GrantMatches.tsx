@@ -1,21 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText } from 'lucide-react';
+import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
+import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { ELIGIBILITY_LABELS } from '../lib/matching';
+import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS } from '../data/applicationFields';
 
 const BUSINESS_CODES = new Set(['22', '23', '25', '99']);
-
-const GENERAL_REQUIREMENTS = [
-  'Active SAM.gov registration with a Unique Entity ID (UEI)',
-  'SF-424 "Application for Federal Assistance" form (and program-specific forms)',
-  'Project narrative describing the proposed work and its goals',
-  'Detailed budget and budget narrative',
-  'Organizational information (structure, key personnel, past performance)',
-  'Letters of support or partnership, if applicable',
-];
 
 function formatExactDate(iso: string | null): string {
   if (!iso) return 'Not listed';
@@ -30,8 +23,16 @@ export function GrantMatches() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
   const { opportunities, loading, error } = useOpportunities();
+  const { getField } = useBusinessDNA();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = opportunities.find((g) => g.id === selectedId) ?? null;
+
+  const applicationFields = SF424_FIELD_MAP.map((mapping) => {
+    const field = getField(mapping.dnaTab, mapping.dnaLabel);
+    const ready = !!field && field.status !== 'required';
+    return { ...mapping, value: field?.value ?? 'Not yet provided', ready };
+  });
+  const readyCount = applicationFields.filter((f) => f.ready).length;
 
   return (
     <div className="panel-enter">
@@ -184,12 +185,45 @@ export function GrantMatches() {
                   </a>
                 )}
                 <div className="bg-surface-2 rounded-xl p-4 mb-5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
-                    <FileText className="w-3.5 h-3.5" />
-                    Typically required for federal grants
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-2">
+                      <FileText className="w-3.5 h-3.5" />
+                      Application fields
+                    </div>
+                    <span className="text-[11px] font-bold text-ink-3">
+                      {readyCount} of {applicationFields.length} ready
+                    </span>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    {GENERAL_REQUIREMENTS.map((req) => (
+                  <div className="flex flex-col gap-2.5">
+                    {applicationFields.map((f) => (
+                      <div key={f.label} className="flex items-start gap-2.5">
+                        {f.ready ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-verified" />
+                        ) : (
+                          <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-ink-3" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-bold text-ink-2">{f.label}</div>
+                          {f.ready ? (
+                            <div className="text-[12.5px] font-semibold">{f.value}</div>
+                          ) : (
+                            <button
+                              className="text-[12.5px] font-semibold text-required underline decoration-dotted"
+                              onClick={() => navigate('/business-dna', { state: { tab: f.dnaTab } })}
+                            >
+                              Not yet provided — add in Business DNA
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mt-4 mb-2">
+                    Project-specific — fill in per application
+                  </div>
+                  <div className="flex flex-col gap-1.5 mb-1">
+                    {PROJECT_SPECIFIC_FIELDS.map((req) => (
                       <div key={req} className="flex items-start gap-2 text-[12px] text-ink-2">
                         <span className="w-1 h-1 rounded-full bg-ink-3 mt-[7px] shrink-0" />
                         {req}
@@ -197,8 +231,8 @@ export function GrantMatches() {
                     ))}
                   </div>
                   <div className="text-[10.5px] text-ink-3 italic mt-3">
-                    General guidance, not extracted from this specific announcement — always confirm exact
-                    requirements against the official announcement above.
+                    Pre-filled fields come straight from your Business DNA. Project-specific fields aren't
+                    facts about the business, so they're always written fresh for this opportunity.
                   </div>
                 </div>
 

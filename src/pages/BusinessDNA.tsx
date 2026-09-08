@@ -1,21 +1,10 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Pencil, Check, X } from 'lucide-react';
 import { Ring } from '../components/Ring';
 import { cn } from '../lib/utils';
-import {
-  DNA_TAB_DEFS,
-  IDENTITY_FIELDS,
-  FINANCIAL_FIELDS,
-  OPERATING_FIELDS,
-  GROWTH_FIELDS,
-  FUNDING_FIELDS,
-  evidenceCaption,
-  type DnaField,
-  type DnaTabDef,
-  type EvidenceStatus,
-} from '../data/sampleData';
-
-type EditableTabId = Exclude<DnaTabDef['id'], 'readiness'>;
+import { DNA_TAB_DEFS, evidenceCaption, type DnaField, type DnaTabDef, type EvidenceStatus } from '../data/sampleData';
+import { useBusinessDNA, type EditableTabId } from '../context/BusinessDNAContext';
 
 const TAB_CONTENT: Record<EditableTabId, { title: string; subtitle: string }> = {
   identity: { title: 'Identity', subtitle: 'Who bEMG Business is on paper.' },
@@ -77,46 +66,13 @@ function FieldRow({
 }
 
 export function BusinessDNA() {
-  const [activeTab, setActiveTab] = useState<DnaTabDef['id']>('identity');
-  const [fieldsByTab, setFieldsByTab] = useState<Record<EditableTabId, DnaField[]>>({
-    identity: IDENTITY_FIELDS,
-    financial: FINANCIAL_FIELDS,
-    operating: OPERATING_FIELDS,
-    growth: GROWTH_FIELDS,
-    funding: FUNDING_FIELDS,
-  });
-  const [editingTab, setEditingTab] = useState<EditableTabId | null>(null);
-  const [draft, setDraft] = useState<DnaField[] | null>(null);
+  const location = useLocation();
+  const initialTab = (location.state as { tab?: DnaTabDef['id'] } | null)?.tab ?? 'identity';
+  const [activeTab, setActiveTab] = useState<DnaTabDef['id']>(initialTab);
+  const { fieldsByTab, editingTab, draft, startEdit, cancelEdit, saveEdit, updateDraftValue } = useBusinessDNA();
 
   const isEditable = activeTab !== 'readiness';
   const isEditingActive = isEditable && editingTab === activeTab;
-
-  function startEdit(tab: EditableTabId) {
-    setEditingTab(tab);
-    setDraft(fieldsByTab[tab].map((f) => ({ ...f })));
-  }
-
-  function cancelEdit() {
-    setEditingTab(null);
-    setDraft(null);
-  }
-
-  function saveEdit() {
-    if (!editingTab || !draft) return;
-    const original = fieldsByTab[editingTab];
-    const merged = draft.map((f, i) =>
-      f.value !== original[i].value
-        ? { ...f, status: 'verified' as const, sourceLabel: 'Owner input · just now' }
-        : f,
-    );
-    setFieldsByTab((prev) => ({ ...prev, [editingTab]: merged }));
-    setEditingTab(null);
-    setDraft(null);
-  }
-
-  function updateDraftValue(index: number, value: string) {
-    setDraft((prev) => (prev ? prev.map((f, i) => (i === index ? { ...f, value } : f)) : prev));
-  }
 
   return (
     <div className="panel-enter flex gap-6 items-start">
