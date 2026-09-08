@@ -8,8 +8,10 @@ import {
   OPERATING_FIELDS,
   GROWTH_FIELDS,
   FUNDING_FIELDS,
+  evidenceCaption,
   type DnaField,
   type DnaTabDef,
+  type EvidenceStatus,
 } from '../data/sampleData';
 
 const TAB_CONTENT: Record<
@@ -40,19 +42,23 @@ const TAB_CONTENT: Record<
   readiness: null,
 };
 
+const EVIDENCE_DOT: Record<EvidenceStatus, string> = {
+  verified: 'bg-verified',
+  inferred: 'bg-inferred',
+  required: 'bg-required',
+};
+
 function FieldRow({ field }: { field: DnaField }) {
   return (
     <div className="field-row">
-      <div className="text-[11px] font-extrabold uppercase tracking-wide text-on-surface-variant">
-        {field.label}
-      </div>
+      <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">{field.label}</div>
       <div>
         <div className="text-sm font-semibold">{field.value}</div>
         {field.sparkline && (
           <svg width="110" height="24" viewBox="0 0 110 24" fill="none" className="mt-1">
             <polyline
               points="0,20 18,17 36,18 54,12 72,9 90,5 110,3"
-              stroke="var(--color-secondary)"
+              stroke="var(--color-accent)"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -61,10 +67,8 @@ function FieldRow({ field }: { field: DnaField }) {
         )}
       </div>
       <div className="flex items-center gap-1.5 justify-end whitespace-nowrap">
-        <span className={cn('w-1.5 h-1.5 rounded-full inline-block', field.verified ? 'bg-emerald-500' : 'bg-amber-500')} />
-        <span className="text-[11px] text-ink3">
-          {field.verified ? 'Verified' : 'Self-reported'} · {field.sourceLabel}
-        </span>
+        <span className={cn('w-1.5 h-1.5 rounded-full inline-block', EVIDENCE_DOT[field.status])} />
+        <span className="text-[11px] text-ink-3">{evidenceCaption(field)}</span>
       </div>
     </div>
   );
@@ -79,7 +83,7 @@ export function BusinessDNA() {
       <div className="w-[260px] shrink-0 flex flex-col gap-2.5">
         {DNA_TAB_DEFS.map((tab) => {
           const active = tab.id === activeTab;
-          const dotClass = active ? 'bg-secondary' : tab.complete ? 'bg-emerald-500' : 'bg-amber-500';
+          const dotClass = active ? 'bg-accent' : tab.complete ? 'bg-verified' : 'bg-inferred';
           return (
             <button
               key={tab.id}
@@ -89,7 +93,7 @@ export function BusinessDNA() {
               <span className={cn('w-[7px] h-[7px] rounded-full mt-1.5 shrink-0', dotClass)} />
               <div className="min-w-0">
                 <div className="text-[13.5px] font-bold">{tab.label}</div>
-                <div className="text-[11.5px] text-ink3 mt-0.5">{tab.desc}</div>
+                <div className="text-[11.5px] text-ink-3 mt-0.5">{tab.desc}</div>
               </div>
             </button>
           );
@@ -99,16 +103,16 @@ export function BusinessDNA() {
       <div className="flex-1 min-w-0 panel-enter">
         {content ? (
           <div className="glass-card p-7">
-            <div className="text-[15px] font-extrabold mb-1.5">{content.title}</div>
-            <div className="text-[12.5px] text-on-surface-variant mb-3.5">{content.subtitle}</div>
+            <div className="text-[15px] font-bold mb-1.5">{content.title}</div>
+            <div className="text-[12.5px] text-ink-2 mb-3.5">{content.subtitle}</div>
             {content.fields!.map((field) => (
               <FieldRow key={field.label} field={field} />
             ))}
           </div>
         ) : (
           <div className="glass-card p-7">
-            <div className="text-[15px] font-extrabold mb-1.5">Readiness</div>
-            <div className="text-[12.5px] text-on-surface-variant mb-[22px]">
+            <div className="text-[15px] font-bold mb-1.5">Readiness</div>
+            <div className="text-[12.5px] text-ink-2 mb-[22px]">
               What Cedar &amp; Co. is ready to pursue right now.
             </div>
             <div className="grid grid-cols-3 gap-5">
@@ -116,10 +120,10 @@ export function BusinessDNA() {
                 <Ring pct={72} color="#059669" size={88} thickness={8} fontSize={20}>
                   72
                 </Ring>
-                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5" style={{ color: '#059669' }}>
+                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-verified">
                   Grant · Grant Ready
                 </div>
-                <div className="text-center text-[11.5px] text-ink3 mt-2 leading-relaxed">
+                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
                   Strong documentation and verified eligibility across active programs.
                 </div>
               </div>
@@ -127,21 +131,21 @@ export function BusinessDNA() {
                 <Ring pct={68} color="#d97706" size={88} thickness={8} fontSize={20}>
                   68
                 </Ring>
-                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5" style={{ color: '#d97706' }}>
+                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-inferred">
                   Loan · Developing
                 </div>
-                <div className="text-center text-[11.5px] text-ink3 mt-2 leading-relaxed">
+                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
                   Add 2024 tax returns to strengthen debt-service coverage evidence.
                 </div>
               </div>
               <div>
-                <Ring pct={24} color="#64748b" size={88} thickness={8} fontSize={20}>
+                <Ring pct={24} color="#8a8178" size={88} thickness={8} fontSize={20}>
                   24
                 </Ring>
-                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-ink3">
+                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-ink-3">
                   Investment · Not applicable
                 </div>
-                <div className="text-center text-[11.5px] text-ink3 mt-2 leading-relaxed">
+                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
                   No equity history on file. Informational only — bEMG does not assess investment suitability.
                 </div>
               </div>

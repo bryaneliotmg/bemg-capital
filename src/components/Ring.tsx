@@ -14,14 +14,11 @@ export function Ring({ pct, color, size = 52, thickness = 5, fontSize = 13, chil
       style={{
         width: size,
         height: size,
-        background: `conic-gradient(${color} ${pct * 3.6}deg, var(--color-outline-variant) 0)`,
+        background: `conic-gradient(${color} ${pct * 3.6}deg, var(--color-line-2) 0)`,
       }}
     >
-      <div
-        className="absolute rounded-full bg-surface-container-low"
-        style={{ inset: thickness }}
-      />
-      <div className="relative font-extrabold" style={{ fontSize }}>
+      <div className="absolute rounded-full bg-surface" style={{ inset: thickness }} />
+      <div className="relative font-serif font-semibold" style={{ fontSize }}>
         {children ?? `${pct}%`}
       </div>
     </div>
