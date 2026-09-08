@@ -1,9 +1,30 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Target, Loader2 } from 'lucide-react';
+import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
+import { ELIGIBILITY_LABELS } from '../lib/matching';
+
+const BUSINESS_CODES = new Set(['22', '23', '25', '99']);
+
+const GENERAL_REQUIREMENTS = [
+  'Active SAM.gov registration with a Unique Entity ID (UEI)',
+  'SF-424 "Application for Federal Assistance" form (and program-specific forms)',
+  'Project narrative describing the proposed work and its goals',
+  'Detailed budget and budget narrative',
+  'Organizational information (structure, key personnel, past performance)',
+  'Letters of support or partnership, if applicable',
+];
+
+function formatExactDate(iso: string | null): string {
+  if (!iso) return 'Not listed';
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export function GrantMatches() {
   const navigate = useNavigate();
@@ -41,7 +62,7 @@ export function GrantMatches() {
           <div className="text-sm font-semibold">No eligible opportunities synced yet.</div>
         </div>
       ) : (
-        <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '1fr 380px' }}>
+        <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '1fr 420px' }}>
           <div className="flex flex-col gap-3.5">
             {opportunities.map((grant) => {
               const isSelected = selectedId === grant.id;
@@ -58,29 +79,58 @@ export function GrantMatches() {
             })}
           </div>
 
-          <div className="glass-card p-[26px] sticky top-[100px]">
+          <div
+            className="glass-card p-[26px] sticky top-[100px] overflow-y-auto scrollarea"
+            style={{ maxHeight: 'calc(100vh - 140px)' }}
+          >
             {selected ? (
               <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className={`text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                      selected.status === 'posted'
+                        ? 'bg-verified/10 text-verified border border-verified/25'
+                        : 'bg-inferred/10 text-inferred border border-inferred/25'
+                    }`}
+                  >
+                    {selected.status === 'posted' ? 'Open' : 'Forecasted'}
+                  </span>
+                  {selected.opportunityNumber && (
+                    <span className="text-[11px] text-ink-3 font-semibold">{selected.opportunityNumber}</span>
+                  )}
+                </div>
                 <div className="text-base font-bold mb-1">{selected.name}</div>
-                <div className="text-[12.5px] text-ink-2 mb-[18px]">{selected.funder}</div>
-                <div className="flex gap-6 mb-5">
+                <div className="text-[12.5px] text-ink-2 mb-5">
+                  {selected.funder}
+                  {selected.cfdaList.length > 0 && ` · ALN ${selected.cfdaList.join(', ')}`}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-5">
                   <div>
                     <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Amount</div>
                     <div className="text-sm font-bold mt-1">{selected.amount}</div>
                   </div>
                   <div>
-                    <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Deadline</div>
-                    <div className="text-sm font-bold mt-1">{selected.deadline}</div>
-                  </div>
-                  <div>
                     <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Match</div>
                     <div className="text-sm font-bold mt-1 text-accent">{selected.matchPct}%</div>
                   </div>
+                  <div>
+                    <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Opens</div>
+                    <div className="text-sm font-bold mt-1">{formatExactDate(selected.openDate)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Closes</div>
+                    <div className="text-sm font-bold mt-1">
+                      {formatExactDate(selected.closeDate)}
+                      <span className="text-ink-3 font-semibold"> ({selected.deadline})</span>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
                   Why you matched
                 </div>
-                <div className="flex flex-col gap-[9px] mb-[22px]">
+                <div className="flex flex-col gap-[9px] mb-5">
                   {selected.evidence.map((ev) => (
                     <div key={ev} className="flex items-start gap-2 text-[12.5px] text-ink-2">
                       <span className="w-[5px] h-[5px] rounded-full bg-accent mt-1.5 shrink-0" />
@@ -88,6 +138,70 @@ export function GrantMatches() {
                     </div>
                   ))}
                 </div>
+
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
+                  About this opportunity
+                </div>
+                <p className="text-[12.5px] text-ink-2 leading-relaxed mb-5 whitespace-pre-line">
+                  {selected.description}
+                </p>
+
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
+                  Who's eligible
+                </div>
+                <div className="flex flex-col gap-1.5 mb-2">
+                  {selected.eligibilityCodes.map((code) => (
+                    <div key={code} className="flex items-start gap-2 text-[12.5px]">
+                      <CheckCircle2
+                        className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                          BUSINESS_CODES.has(code) ? 'text-verified' : 'text-ink-3'
+                        }`}
+                      />
+                      <span className={BUSINESS_CODES.has(code) ? 'text-ink font-semibold' : 'text-ink-2'}>
+                        {ELIGIBILITY_LABELS[code] ?? `Eligibility code ${code}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {selected.applicantEligibilityDesc && (
+                  <p className="text-[12px] text-ink-3 leading-relaxed italic mb-5">
+                    {selected.applicantEligibilityDesc}
+                  </p>
+                )}
+
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5 mt-1">
+                  How to apply
+                </div>
+                {selected.announcementUrl && (
+                  <a
+                    href={selected.announcementUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-[12.5px] font-bold text-accent mb-3.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    View the full official announcement on Grants.gov
+                  </a>
+                )}
+                <div className="bg-surface-2 rounded-xl p-4 mb-5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
+                    <FileText className="w-3.5 h-3.5" />
+                    Typically required for federal grants
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {GENERAL_REQUIREMENTS.map((req) => (
+                      <div key={req} className="flex items-start gap-2 text-[12px] text-ink-2">
+                        <span className="w-1 h-1 rounded-full bg-ink-3 mt-[7px] shrink-0" />
+                        {req}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[10.5px] text-ink-3 italic mt-3">
+                    General guidance, not extracted from this specific announcement — always confirm exact
+                    requirements against the official announcement above.
+                  </div>
+                </div>
+
                 <button
                   className="glass-btn w-full justify-center"
                   onClick={() => {

@@ -17,7 +17,32 @@ export interface RawFundingOpportunity {
   award_ceiling: number | null;
   eligibility_codes: string[] | null;
   description: string | null;
+  announcement_url: string | null;
+  applicant_eligibility_desc: string | null;
 }
+
+// Grants.gov's fixed applicant-type facet — the full enum, not just the
+// business-relevant subset, so the detail panel can show every eligible
+// applicant type for a grant, not just the ones that matched bEMG.
+export const ELIGIBILITY_LABELS: Record<string, string> = {
+  '00': 'State governments',
+  '01': 'County governments',
+  '02': 'City or township governments',
+  '04': 'Special district governments',
+  '05': 'Independent school districts',
+  '06': 'Public and State controlled institutions of higher education',
+  '07': 'Native American tribal governments (Federally recognized)',
+  '08': 'Public housing authorities/Indian housing authorities',
+  '11': 'Native American tribal organizations (other than Federally recognized)',
+  '12': 'Nonprofits with a 501(c)(3) status, other than institutions of higher education',
+  '13': 'Nonprofits without a 501(c)(3) status, other than institutions of higher education',
+  '20': 'Private institutions of higher education',
+  '21': 'Individuals',
+  '22': 'For-profit organizations other than small businesses',
+  '23': 'Small businesses',
+  '25': 'Others (see additional eligibility information)',
+  '99': 'Unrestricted — open to any type of entity',
+};
 
 export interface BusinessProfile {
   /** Lowercase keywords describing the business's industry/services, used for title/description overlap. */

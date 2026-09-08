@@ -94,6 +94,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               .map((a: unknown) => (typeof a === 'string' ? a : String((a as { id?: string })?.id ?? '')))
               .filter((code: string) => code.length > 0)
           : [];
+        const announcementUrl: string | null = detailSource.fundingDescLinkUrl ?? null;
+        const applicantEligibilityDesc: string | null = detailSource.applicantEligibilityDesc ?? null;
 
         const { error } = await supabase.from('funding_opportunities').upsert({
           id: String(hit.id),
@@ -110,6 +112,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           award_ceiling: awardCeiling,
           eligibility_codes: eligibilityCodes,
           description,
+          announcement_url: announcementUrl,
+          applicant_eligibility_desc: applicantEligibilityDesc,
           raw_detail: detail,
           synced_at: new Date().toISOString(),
         });
