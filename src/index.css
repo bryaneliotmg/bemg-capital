@@ -61,7 +61,7 @@ a:hover {
 
   .glass-btn-outline {
     @apply px-[18px] py-2.5 bg-surface-2 text-ink font-bold uppercase tracking-wider text-[11px]
-      rounded-full border border-line-2 transition-colors duration-150;
+      rounded-full border border-line-2 inline-flex items-center gap-1.5 transition-colors duration-150;
   }
   .glass-btn-outline:hover {
     @apply bg-line;

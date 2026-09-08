@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pencil, Check, X } from 'lucide-react';
 import { Ring } from '../components/Ring';
 import { cn } from '../lib/utils';
 import {
@@ -14,32 +15,14 @@ import {
   type EvidenceStatus,
 } from '../data/sampleData';
 
-const TAB_CONTENT: Record<
-  DnaTabDef['id'],
-  { title: string; subtitle: string; fields?: DnaField[] } | null
-> = {
-  identity: { title: 'Identity', subtitle: 'Who Cedar & Co. is on paper.', fields: IDENTITY_FIELDS },
-  financial: {
-    title: 'Financial DNA',
-    subtitle: 'The numbers capital providers will see, with sources.',
-    fields: FINANCIAL_FIELDS,
-  },
-  operating: {
-    title: 'Operating DNA',
-    subtitle: 'How the business actually runs day to day.',
-    fields: OPERATING_FIELDS,
-  },
-  growth: {
-    title: 'Growth DNA',
-    subtitle: 'Where the business is headed, and what it needs to get there.',
-    fields: GROWTH_FIELDS,
-  },
-  funding: {
-    title: 'Funding History',
-    subtitle: 'Every prior grant, loan, and application on record.',
-    fields: FUNDING_FIELDS,
-  },
-  readiness: null,
+type EditableTabId = Exclude<DnaTabDef['id'], 'readiness'>;
+
+const TAB_CONTENT: Record<EditableTabId, { title: string; subtitle: string }> = {
+  identity: { title: 'Identity', subtitle: 'Who bEMG Business is on paper.' },
+  financial: { title: 'Financial DNA', subtitle: 'The numbers capital providers will see, with sources.' },
+  operating: { title: 'Operating DNA', subtitle: 'How the business actually runs day to day.' },
+  growth: { title: 'Growth DNA', subtitle: 'Where the business is headed, and what it needs to get there.' },
+  funding: { title: 'Funding History', subtitle: 'Every prior grant, loan, and application on record.' },
 };
 
 const EVIDENCE_DOT: Record<EvidenceStatus, string> = {
@@ -48,22 +31,41 @@ const EVIDENCE_DOT: Record<EvidenceStatus, string> = {
   required: 'bg-required',
 };
 
-function FieldRow({ field }: { field: DnaField }) {
+function FieldRow({
+  field,
+  editing,
+  onChange,
+}: {
+  field: DnaField;
+  editing?: boolean;
+  onChange?: (value: string) => void;
+}) {
   return (
     <div className="field-row">
       <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">{field.label}</div>
       <div>
-        <div className="text-sm font-semibold">{field.value}</div>
-        {field.sparkline && (
-          <svg width="110" height="24" viewBox="0 0 110 24" fill="none" className="mt-1">
-            <polyline
-              points="0,20 18,17 36,18 54,12 72,9 90,5 110,3"
-              stroke="var(--color-accent)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        {editing ? (
+          <input
+            value={field.value}
+            onChange={(e) => onChange?.(e.target.value)}
+            placeholder="Not yet provided"
+            className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-1.5 text-sm font-semibold outline-none focus:border-accent"
+          />
+        ) : (
+          <>
+            <div className="text-sm font-semibold">{field.value}</div>
+            {field.sparkline && (
+              <svg width="110" height="24" viewBox="0 0 110 24" fill="none" className="mt-1">
+                <polyline
+                  points="0,20 18,17 36,18 54,12 72,9 90,5 110,3"
+                  stroke="var(--color-accent)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </>
         )}
       </div>
       <div className="flex items-center gap-1.5 justify-end whitespace-nowrap">
@@ -76,14 +78,53 @@ function FieldRow({ field }: { field: DnaField }) {
 
 export function BusinessDNA() {
   const [activeTab, setActiveTab] = useState<DnaTabDef['id']>('identity');
-  const content = TAB_CONTENT[activeTab];
+  const [fieldsByTab, setFieldsByTab] = useState<Record<EditableTabId, DnaField[]>>({
+    identity: IDENTITY_FIELDS,
+    financial: FINANCIAL_FIELDS,
+    operating: OPERATING_FIELDS,
+    growth: GROWTH_FIELDS,
+    funding: FUNDING_FIELDS,
+  });
+  const [editingTab, setEditingTab] = useState<EditableTabId | null>(null);
+  const [draft, setDraft] = useState<DnaField[] | null>(null);
+
+  const isEditable = activeTab !== 'readiness';
+  const isEditingActive = isEditable && editingTab === activeTab;
+
+  function startEdit(tab: EditableTabId) {
+    setEditingTab(tab);
+    setDraft(fieldsByTab[tab].map((f) => ({ ...f })));
+  }
+
+  function cancelEdit() {
+    setEditingTab(null);
+    setDraft(null);
+  }
+
+  function saveEdit() {
+    if (!editingTab || !draft) return;
+    const original = fieldsByTab[editingTab];
+    const merged = draft.map((f, i) =>
+      f.value !== original[i].value
+        ? { ...f, status: 'verified' as const, sourceLabel: 'Owner input · just now' }
+        : f,
+    );
+    setFieldsByTab((prev) => ({ ...prev, [editingTab]: merged }));
+    setEditingTab(null);
+    setDraft(null);
+  }
+
+  function updateDraftValue(index: number, value: string) {
+    setDraft((prev) => (prev ? prev.map((f, i) => (i === index ? { ...f, value } : f)) : prev));
+  }
 
   return (
     <div className="panel-enter flex gap-6 items-start">
       <div className="w-[260px] shrink-0 flex flex-col gap-2.5">
         {DNA_TAB_DEFS.map((tab) => {
           const active = tab.id === activeTab;
-          const dotClass = active ? 'bg-accent' : tab.complete ? 'bg-verified' : 'bg-inferred';
+          const complete = tab.id === 'readiness' ? tab.complete : !fieldsByTab[tab.id].some((f) => f.status === 'required');
+          const dotClass = active ? 'bg-accent' : complete ? 'bg-verified' : 'bg-inferred';
           return (
             <button
               key={tab.id}
@@ -101,12 +142,38 @@ export function BusinessDNA() {
       </div>
 
       <div className="flex-1 min-w-0 panel-enter">
-        {content ? (
+        {isEditable ? (
           <div className="glass-card p-7">
-            <div className="text-[15px] font-bold mb-1.5">{content.title}</div>
-            <div className="text-[12.5px] text-ink-2 mb-3.5">{content.subtitle}</div>
-            {content.fields!.map((field) => (
-              <FieldRow key={field.label} field={field} />
+            <div className="flex items-start justify-between gap-4 mb-3.5">
+              <div>
+                <div className="text-[15px] font-bold mb-1.5">{TAB_CONTENT[activeTab].title}</div>
+                <div className="text-[12.5px] text-ink-2">{TAB_CONTENT[activeTab].subtitle}</div>
+              </div>
+              {isEditingActive ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button className="glass-btn-outline" onClick={cancelEdit}>
+                    <X className="w-3.5 h-3.5" />
+                    Cancel
+                  </button>
+                  <button className="glass-btn" onClick={saveEdit}>
+                    <Check className="w-3.5 h-3.5" />
+                    Save
+                  </button>
+                </div>
+              ) : (
+                <button className="glass-btn-outline shrink-0" onClick={() => startEdit(activeTab)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                  Edit
+                </button>
+              )}
+            </div>
+            {(isEditingActive ? draft! : fieldsByTab[activeTab]).map((field, i) => (
+              <FieldRow
+                key={field.label}
+                field={field}
+                editing={isEditingActive}
+                onChange={(value) => updateDraftValue(i, value)}
+              />
             ))}
           </div>
         ) : (
