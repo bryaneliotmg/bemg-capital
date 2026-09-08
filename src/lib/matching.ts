@@ -19,6 +19,12 @@ export interface RawFundingOpportunity {
   description: string | null;
   announcement_url: string | null;
   applicant_eligibility_desc: string | null;
+  funding_categories: FundingCategory[] | null;
+}
+
+export interface FundingCategory {
+  id: string;
+  description: string;
 }
 
 // Grants.gov's fixed applicant-type facet — the full enum, not just the

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle } from 'lucide-react';
+import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
@@ -22,10 +22,35 @@ function formatExactDate(iso: string | null): string {
 export function GrantMatches() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
-  const { opportunities, loading, error } = useOpportunities();
+  const { opportunities, loading, error, search, searching, searchError } = useOpportunities();
   const { getField } = useBusinessDNA();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = opportunities.find((g) => g.id === selectedId) ?? null;
+  const [searchInput, setSearchInput] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  // "Sections" built from Grants.gov's own funding-activity-category labels present
+  // in whatever's actually synced — not a hardcoded/guessed taxonomy. Demographic or
+  // regional targeting (minority-owned, urban, rural, veteran, etc.) isn't a
+  // structured field Grants.gov exposes, so those live in free text and surface via
+  // the search box instead of a category chip here.
+  const categories = useMemo(() => {
+    const counts = new Map<string, { description: string; count: number }>();
+    for (const opp of opportunities) {
+      for (const cat of opp.fundingCategories) {
+        const existing = counts.get(cat.id);
+        counts.set(cat.id, { description: cat.description, count: (existing?.count ?? 0) + 1 });
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => b.count - a.count);
+  }, [opportunities]);
+
+  const visibleOpportunities = activeCategory
+    ? opportunities.filter((o) => o.fundingCategories.some((c) => c.id === activeCategory))
+    : opportunities;
+
+  const selected = visibleOpportunities.find((g) => g.id === selectedId) ?? null;
 
   const applicationFields = SF424_FIELD_MAP.map((mapping) => {
     const field = getField(mapping.dnaTab, mapping.dnaLabel);
@@ -34,18 +59,69 @@ export function GrantMatches() {
   });
   const readyCount = applicationFields.filter((f) => f.ready).length;
 
+  function handleSearch() {
+    const term = searchInput.trim();
+    if (!term || searching) return;
+    search(term);
+  }
+
   return (
     <div className="panel-enter">
-      <div className="flex items-center gap-2.5 bg-surface-2 border border-line-2 rounded-2xl p-1.5 w-fit mb-5">
-        <div className="chip active">Grants · {loading ? '…' : opportunities.length}</div>
-        <div className="chip locked" title="Coming soon">
-          <Lock className="w-[11px] h-[11px]" />
-          Loans
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="Search Grants.gov — e.g. minority-owned, rural, urban, veteran, AI…"
+            className="w-full bg-surface border border-line-2 rounded-full pl-10 pr-4 py-2.5 text-[13px] outline-none focus:border-accent"
+          />
         </div>
-        <div className="chip locked" title="Coming soon">
-          <Lock className="w-[11px] h-[11px]" />
-          VC / Equity
+        <button className="glass-btn" onClick={handleSearch} disabled={searching || !searchInput.trim()}>
+          {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+          {searching ? 'Searching…' : 'Search'}
+        </button>
+      </div>
+      {searchError && <div className="text-[12px] text-required font-semibold mb-3">{searchError}</div>}
+      <div className="text-[11px] text-ink-3 mb-4 leading-relaxed max-w-2xl">
+        Searches Grants.gov live and adds any new eligible matches to your list below. Demographic and
+        regional set-asides (minority-owned, urban, rural, veteran, etc.) aren't a separate structured
+        category in federal data — they show up in program text, so search for them as keywords rather
+        than a filter chip.
+      </div>
+
+      <div className="flex items-center gap-2.5 flex-wrap mb-5">
+        <div className="flex items-center gap-2.5 bg-surface-2 border border-line-2 rounded-2xl p-1.5 w-fit">
+          <div className="chip active">Grants · {loading ? '…' : opportunities.length}</div>
+          <div className="chip locked" title="Coming soon">
+            <Lock className="w-[11px] h-[11px]" />
+            Loans
+          </div>
+          <div className="chip locked" title="Coming soon">
+            <Lock className="w-[11px] h-[11px]" />
+            VC / Equity
+          </div>
         </div>
+        {categories.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {activeCategory && (
+              <button className="chip" onClick={() => setActiveCategory(null)}>
+                <X className="w-[11px] h-[11px]" />
+                Clear
+              </button>
+            )}
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                className={`chip ${activeCategory === cat.id ? 'active' : ''}`}
+                onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
+              >
+                {cat.description} · {cat.count}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -57,15 +133,17 @@ export function GrantMatches() {
         <div className="glass-card p-10 text-center text-ink-3">
           <div className="text-sm font-semibold">Couldn't load opportunities: {error}</div>
         </div>
-      ) : opportunities.length === 0 ? (
+      ) : visibleOpportunities.length === 0 ? (
         <div className="glass-card p-10 text-center text-ink-3">
           <Target className="w-7 h-7 mx-auto mb-3" />
-          <div className="text-sm font-semibold">No eligible opportunities synced yet.</div>
+          <div className="text-sm font-semibold">
+            {activeCategory ? 'No matches in this category.' : 'No eligible opportunities synced yet.'}
+          </div>
         </div>
       ) : (
         <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '1fr 420px' }}>
           <div className="flex flex-col gap-3.5 min-w-0">
-            {opportunities.map((grant) => {
+            {visibleOpportunities.map((grant) => {
               const isSelected = selectedId === grant.id;
               return (
                 <div
@@ -101,10 +179,22 @@ export function GrantMatches() {
                   )}
                 </div>
                 <div className="text-base font-bold mb-1">{selected.name}</div>
-                <div className="text-[12.5px] text-ink-2 mb-5">
+                <div className="text-[12.5px] text-ink-2 mb-2">
                   {selected.funder}
                   {selected.cfdaList.length > 0 && ` · ALN ${selected.cfdaList.join(', ')}`}
                 </div>
+                {selected.fundingCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-5">
+                    {selected.fundingCategories.map((cat) => (
+                      <span
+                        key={cat.id}
+                        className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-surface-2 text-ink-2"
+                      >
+                        {cat.description}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4 mb-5">
                   <div>

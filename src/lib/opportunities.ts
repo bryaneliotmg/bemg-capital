@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { matchOpportunity, type RawFundingOpportunity } from './matching';
+import { matchOpportunity, type RawFundingOpportunity, type FundingCategory } from './matching';
 import { BUSINESS_PROFILE_KEYWORDS } from '../data/sampleData';
 
 export interface MatchedOpportunity {
@@ -23,6 +23,8 @@ export interface MatchedOpportunity {
   description: string;
   applicantEligibilityDesc: string | null;
   announcementUrl: string | null;
+  /** Grants.gov's own funding-activity-category labels for this opportunity (e.g. Health, Education) — used to build the category "sections" filter. */
+  fundingCategories: FundingCategory[];
 }
 
 function formatAmount(floor: number | null, ceiling: number | null): string {
@@ -59,12 +61,11 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+const SELECT_COLUMNS =
+  'id, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories';
+
 export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
-  const { data, error } = await supabase
-    .from('funding_opportunities')
-    .select(
-      'id, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc',
-    );
+  const { data, error } = await supabase.from('funding_opportunities').select(SELECT_COLUMNS);
 
   if (error) throw error;
 
@@ -94,9 +95,32 @@ export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
         description: opp.description ? stripHtml(opp.description) : 'No description provided.',
         applicantEligibilityDesc: opp.applicant_eligibility_desc ? stripHtml(opp.applicant_eligibility_desc) : null,
         announcementUrl: opp.announcement_url,
+        fundingCategories: opp.funding_categories ?? [],
       };
       return matched;
     })
     .filter((x): x is MatchedOpportunity => x !== null)
     .sort((a, b) => b.matchPct - a.matchPct);
+}
+
+export interface SearchGrantsResponse {
+  ok: boolean;
+  totalHits?: number;
+  fetched?: number;
+  synced?: number;
+  errorCount?: number;
+  error?: string;
+}
+
+/**
+ * Triggers a live Grants.gov keyword search server-side (avoids CORS, keeps the
+ * service-role key off the client) and caches whatever it finds. Callers should
+ * re-fetch getMatchedOpportunities() afterward to see the (possibly new) results —
+ * this function only grows the shared cache, it doesn't return opportunities itself.
+ */
+export async function searchGrants(keyword: string): Promise<SearchGrantsResponse> {
+  const res = await fetch(`/api/search-grants?q=${encodeURIComponent(keyword)}`);
+  const body = (await res.json()) as SearchGrantsResponse;
+  if (!res.ok) throw new Error(body.error || 'Search failed');
+  return body;
 }
