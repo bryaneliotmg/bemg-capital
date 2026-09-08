@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { syncGrants } from '../_lib/grantsSync';
+import { syncGrants } from '../_lib/grantsSync.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cronSecret = process.env.CRON_SECRET;

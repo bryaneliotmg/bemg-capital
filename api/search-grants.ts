@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { syncGrants } from './_lib/grantsSync';
+import { syncGrants } from './_lib/grantsSync.js';
 
 // User-triggered search (as opposed to the scheduled cron sync): looks up
 // Grants.gov live by keyword, right now, and caches whatever it finds into
