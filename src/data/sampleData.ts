@@ -165,44 +165,61 @@ export function evidenceCaption(field: DnaField): string {
 }
 
 export const IDENTITY_FIELDS: DnaField[] = [
-  { label: 'Legal Name', value: 'Cedar & Co. Millwork LLC', status: 'verified', sourceLabel: 'Secretary of State · 2d ago' },
-  { label: 'Industry', value: 'Wood Product Manufacturing · NAICS 321999', status: 'verified', sourceLabel: 'Business registration · 2d ago' },
-  { label: 'Location', value: 'Jackson, Mississippi', status: 'verified', sourceLabel: 'Business registration · 2d ago' },
-  { label: 'Years Operating', value: '6 years', status: 'verified', sourceLabel: 'Formation date · 2d ago' },
-  { label: 'Ownership', value: 'Woman-owned · Single-member LLC', status: 'verified', sourceLabel: 'WBENC certification · 30d ago' },
-  { label: 'Employees', value: '8 full-time', status: 'verified', sourceLabel: 'Owner input · 14d ago' },
+  { label: 'Legal Name', value: 'bEMG Business', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'Industry', value: 'Brand Management, AI Consulting & Web Development', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'Website', value: 'bryaneliotmg.com', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'Service Area', value: 'National', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'Headquarters City', value: 'Not yet provided', status: 'required', sourceLabel: 'No city on file — add to unlock location-based programs' },
+  { label: 'Ownership Structure', value: 'Not yet provided', status: 'required', sourceLabel: 'Entity type/ownership not recorded yet' },
 ];
 
 export const FINANCIAL_FIELDS: DnaField[] = [
-  { label: 'Revenue (TTM)', value: '$620,000', status: 'verified', sourceLabel: 'QuickBooks sync · 2h ago', sparkline: true },
-  { label: 'Revenue Growth', value: '+18% YoY', status: 'inferred', sourceLabel: 'calculated from revenue history · 2h ago' },
-  { label: 'Net Margin', value: '12%', status: 'verified', sourceLabel: 'QuickBooks sync · 2h ago' },
-  { label: 'Cash Flow', value: 'Positive · 3.2 months runway', status: 'inferred', sourceLabel: 'calculated from bank feed + expenses · 2h ago' },
-  { label: 'Outstanding Debt', value: '$45,000 equipment loan', status: 'verified', sourceLabel: 'Bank feed · 2h ago' },
-  { label: 'Total Assets', value: '$210,000', status: 'verified', sourceLabel: 'Owner input · 45d ago' },
-  { label: '2024 Tax Return', value: 'Not yet provided', status: 'required', sourceLabel: 'Upload to strengthen Loan Readiness' },
+  { label: 'Subscription Tier', value: 'Starter', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
+  { label: 'Revenue (TTM)', value: 'Not yet provided', status: 'required', sourceLabel: 'Connect accounting software or enter manually' },
+  { label: 'Revenue Growth', value: 'Not available', status: 'required', sourceLabel: 'Needs revenue history to calculate' },
+  { label: 'Net Margin', value: 'Not yet provided', status: 'required', sourceLabel: 'Needs revenue + expense data' },
+  { label: 'Cash Flow', value: 'Not yet provided', status: 'required', sourceLabel: 'Connect a bank feed to calculate' },
+  { label: 'Outstanding Debt', value: 'Not yet provided', status: 'required', sourceLabel: 'Not recorded yet' },
+  { label: '2024 Tax Return', value: 'Not yet provided', status: 'required', sourceLabel: 'Upload to unlock Financial DNA' },
 ];
 
 export const OPERATING_FIELDS: DnaField[] = [
-  { label: 'Business Model', value: 'B2B wholesale + direct-to-consumer', status: 'verified', sourceLabel: 'Owner input · 45d ago' },
-  { label: 'Products', value: 'Custom furniture & architectural millwork', status: 'verified', sourceLabel: 'Owner input · 45d ago' },
-  { label: 'Customers', value: '120+ active retail & trade accounts', status: 'verified', sourceLabel: 'CRM sync · 5d ago' },
-  { label: 'Market', value: 'Southeast United States', status: 'verified', sourceLabel: 'Owner input · 45d ago' },
-  { label: 'Team', value: '8 FTE + 2 apprentices', status: 'verified', sourceLabel: 'Owner input · 14d ago' },
+  {
+    label: 'Business Model',
+    value: 'Done-for-you subscription platform for solo entrepreneurs and small service businesses',
+    status: 'verified',
+    sourceLabel: 'bemg-platform company profile · synced today',
+  },
+  {
+    label: 'Products & Services',
+    value: 'Social Media Automation, Website Design & Management, App Development, AI Receptionist, Digital Business Card, Lead Manager, Signal Newsletter, Directory Listing',
+    status: 'verified',
+    sourceLabel: 'bemg-platform company profile · synced today',
+  },
+  { label: 'Customers', value: '605 contacts in CRM', status: 'verified', sourceLabel: 'bemg-platform contacts table · live' },
+  { label: 'Content Activity', value: '85 posts drafted · 79 published', status: 'verified', sourceLabel: 'bemg-platform content table · live' },
+  { label: 'Newsletter', value: '14 Signal issues sent', status: 'verified', sourceLabel: 'bemg-platform signals table · live' },
+  {
+    label: 'Market',
+    value: 'Solo entrepreneurs & small service businesses — barbershops, salons, restaurants, spas, fitness studios, consultants',
+    status: 'verified',
+    sourceLabel: 'bemg-platform company profile · synced today',
+  },
+  { label: 'Team', value: 'Not yet provided', status: 'required', sourceLabel: 'Employee count not recorded yet' },
 ];
 
 export const GROWTH_FIELDS: DnaField[] = [
-  { label: 'Trajectory', value: 'Expanding to a second production facility', status: 'verified', sourceLabel: 'Owner input · 20d ago' },
-  { label: 'Expansion Plan', value: '6,000 sq ft facility, target Q3 2026', status: 'verified', sourceLabel: 'Owner input · 20d ago' },
-  { label: 'Capital Requirement', value: '$150,000 – $250,000', status: 'verified', sourceLabel: 'Owner input · 20d ago' },
-  { label: 'Intended Use of Funds', value: 'Equipment (60%) · Facility buildout (40%)', status: 'verified', sourceLabel: 'Owner input · 20d ago' },
+  { label: 'Trajectory', value: 'Not yet provided', status: 'required', sourceLabel: 'No growth trajectory on file yet' },
+  { label: 'Expansion Plan', value: 'Not yet provided', status: 'required', sourceLabel: 'No expansion plan on file yet' },
+  { label: 'Capital Requirement', value: 'Not yet provided', status: 'required', sourceLabel: 'Tell us what you need funding for' },
+  { label: 'Intended Use of Funds', value: 'Not yet provided', status: 'required', sourceLabel: 'No use-of-funds breakdown yet' },
 ];
 
 export const FUNDING_FIELDS: DnaField[] = [
-  { label: 'Grants Awarded', value: '1 of 3 applied · $12,000 (MS Rural Grant, 2023)', status: 'verified', sourceLabel: 'Award letter · 90d ago' },
-  { label: 'Loans', value: 'SBA 7(a) · $85,000 · originated 2022', status: 'verified', sourceLabel: 'Bank feed · 2h ago' },
-  { label: 'Equity Raised', value: 'None to date', status: 'verified', sourceLabel: 'Owner input · 90d ago' },
-  { label: 'Applications Submitted', value: '7 total', status: 'verified', sourceLabel: 'Platform history · Live' },
+  { label: 'Grants Awarded', value: 'Not yet provided', status: 'required', sourceLabel: 'No prior grant history on file' },
+  { label: 'Loans', value: 'Not yet provided', status: 'required', sourceLabel: 'No prior loan history on file' },
+  { label: 'Equity Raised', value: 'None to date', status: 'verified', sourceLabel: 'No equity or cap table on file' },
+  { label: 'Applications Submitted', value: '0 total', status: 'verified', sourceLabel: 'bEMG Capital platform history · live' },
 ];
 
 export interface DnaTabDef {
@@ -213,11 +230,11 @@ export interface DnaTabDef {
 }
 
 export const DNA_TAB_DEFS: DnaTabDef[] = [
-  { id: 'identity', label: 'Identity', desc: 'Legal, location, ownership', complete: true },
+  { id: 'identity', label: 'Identity', desc: 'Legal, location, ownership', complete: false },
   { id: 'financial', label: 'Financial DNA', desc: 'Revenue, margin, cash flow', complete: false },
-  { id: 'operating', label: 'Operating DNA', desc: 'Model, customers, team', complete: true },
+  { id: 'operating', label: 'Operating DNA', desc: 'Model, customers, team', complete: false },
   { id: 'growth', label: 'Growth DNA', desc: 'Trajectory, capital needs', complete: false },
-  { id: 'funding', label: 'Funding History', desc: 'Prior grants & loans', complete: true },
+  { id: 'funding', label: 'Funding History', desc: 'Prior grants & loans', complete: false },
   { id: 'readiness', label: 'Readiness', desc: 'Grant, loan & investment scores', complete: true },
 ];
 

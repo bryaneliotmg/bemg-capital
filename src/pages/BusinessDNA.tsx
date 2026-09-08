@@ -113,34 +113,34 @@ export function BusinessDNA() {
           <div className="glass-card p-7">
             <div className="text-[15px] font-bold mb-1.5">Readiness</div>
             <div className="text-[12.5px] text-ink-2 mb-[22px]">
-              What Cedar &amp; Co. is ready to pursue right now.
+              What bEMG Business is ready to pursue right now.
             </div>
             <div className="grid grid-cols-3 gap-5">
               <div>
-                <Ring pct={72} color="#059669" size={88} thickness={8} fontSize={20}>
-                  72
-                </Ring>
-                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-verified">
-                  Grant · Grant Ready
-                </div>
-                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
-                  Strong documentation and verified eligibility across active programs.
-                </div>
-              </div>
-              <div>
-                <Ring pct={68} color="#d97706" size={88} thickness={8} fontSize={20}>
-                  68
-                </Ring>
-                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-inferred">
-                  Loan · Developing
-                </div>
-                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
-                  Add 2024 tax returns to strengthen debt-service coverage evidence.
-                </div>
-              </div>
-              <div>
                 <Ring pct={24} color="#8a8178" size={88} thickness={8} fontSize={20}>
                   24
+                </Ring>
+                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-ink-3">
+                  Grant · Building
+                </div>
+                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
+                  Identity and Operating DNA are solid, but no financial documentation is on file yet.
+                </div>
+              </div>
+              <div>
+                <Ring pct={12} color="#8a8178" size={88} thickness={8} fontSize={20}>
+                  12
+                </Ring>
+                <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-ink-3">
+                  Loan · Building
+                </div>
+                <div className="text-center text-[11.5px] text-ink-3 mt-2 leading-relaxed">
+                  Loans typically need more financial history than grants — nothing to evaluate yet.
+                </div>
+              </div>
+              <div>
+                <Ring pct={8} color="#8a8178" size={88} thickness={8} fontSize={20}>
+                  8
                 </Ring>
                 <div className="text-center text-xs font-extrabold uppercase tracking-wide mt-3.5 text-ink-3">
                   Investment · Not applicable

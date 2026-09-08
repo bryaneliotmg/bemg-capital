@@ -68,10 +68,10 @@ export function Sidebar() {
 
       <div className="border-t border-sidebar-hover pt-4 flex items-center gap-2.5">
         <div className="w-[34px] h-[34px] rounded-full bg-accent text-white flex items-center justify-center font-extrabold text-sm shrink-0">
-          C
+          B
         </div>
         <div className="min-w-0">
-          <div className="text-[12.5px] font-bold truncate text-sidebar-text-active">Cedar &amp; Co. Millwork</div>
+          <div className="text-[12.5px] font-bold truncate text-sidebar-text-active">bEMG Business</div>
           <div className="text-[10.5px] text-sidebar-text font-semibold">Funding OS plan</div>
         </div>
       </div>

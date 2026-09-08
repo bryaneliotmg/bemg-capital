@@ -5,13 +5,13 @@ import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { FUNDING_OPPORTUNITIES, readinessBand } from '../data/sampleData';
 import { useApplications } from '../context/ApplicationsContext';
 
-const DNA_COMPLETENESS = 84;
+const DNA_COMPLETENESS = 46;
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [readiness, setReadiness] = useState(72);
+  const [readiness, setReadiness] = useState(24);
   const band = readinessBand(readiness);
   const dashboardGrants = FUNDING_OPPORTUNITIES.slice(0, 4);
 
@@ -135,20 +135,20 @@ export function Dashboard() {
             </div>
             <div className="flex flex-col gap-[11px] text-[13px]">
               <div className="flex justify-between">
-                <span className="text-ink-3">Revenue (TTM)</span>
-                <span className="font-bold">$620,000</span>
+                <span className="text-ink-3">Contacts</span>
+                <span className="font-bold">605</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-ink-3">Employees</span>
-                <span className="font-bold">8</span>
+                <span className="text-ink-3">Posts published</span>
+                <span className="font-bold">79</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-ink-3">Years operating</span>
-                <span className="font-bold">6</span>
+                <span className="text-ink-3">Signals sent</span>
+                <span className="font-bold">14</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-ink-3">Location</span>
-                <span className="font-bold">Jackson, MS</span>
+                <span className="text-ink-3">Plan</span>
+                <span className="font-bold">Starter</span>
               </div>
             </div>
             <button className="link-btn block mt-4 text-xs font-bold" onClick={() => navigate('/business-dna')}>
@@ -161,10 +161,10 @@ export function Dashboard() {
               Next best action
             </div>
             <div className="text-[13px] text-ink-2 leading-relaxed">
-              Upload your 2024 tax return to raise Loan Readiness from 68 → 78.
+              Financial DNA is empty — connect accounting software or provide 2024 financials to start computing Grant and Loan Readiness.
             </div>
             <button className="glass-btn-outline mt-3.5" onClick={() => navigate('/business-dna')}>
-              Upload document
+              Add financial info
             </button>
           </div>
         </div>
