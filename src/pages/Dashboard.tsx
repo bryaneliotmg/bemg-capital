@@ -84,8 +84,8 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '1fr 320px' }}>
-        <div>
+      <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '1fr 320px' }}>
+        <div className="min-w-0">
           <div className="text-[13px] font-extrabold uppercase tracking-wide text-ink-2 mb-3.5">
             Matched Opportunities
           </div>
@@ -103,13 +103,13 @@ export function Dashboard() {
               No eligible opportunities synced yet.
             </div>
           ) : (
-            <div className="flex flex-col gap-3.5">
+            <div className="flex flex-col gap-3.5 min-w-0">
               {dashboardGrants.map((grant) => {
                 const expanded = expandedId === grant.id;
                 return (
                   <div
                     key={grant.id}
-                    className="bg-surface border border-line rounded-2xl px-5 py-[18px] cursor-pointer hover:shadow-md transition-shadow"
+                    className="bg-surface border border-line rounded-2xl px-5 py-[18px] cursor-pointer hover:shadow-md transition-shadow min-w-0"
                     onClick={() => setExpandedId(expanded ? null : grant.id)}
                   >
                     <GrantSummaryRow

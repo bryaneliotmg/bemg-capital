@@ -63,14 +63,14 @@ export function GrantMatches() {
           <div className="text-sm font-semibold">No eligible opportunities synced yet.</div>
         </div>
       ) : (
-        <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '1fr 420px' }}>
-          <div className="flex flex-col gap-3.5">
+        <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '1fr 420px' }}>
+          <div className="flex flex-col gap-3.5 min-w-0">
             {opportunities.map((grant) => {
               const isSelected = selectedId === grant.id;
               return (
                 <div
                   key={grant.id}
-                  className="bg-surface rounded-2xl px-5 py-[18px] cursor-pointer hover:shadow-md transition-shadow"
+                  className="bg-surface rounded-2xl px-5 py-[18px] cursor-pointer hover:shadow-md transition-shadow min-w-0"
                   style={{ border: `1px solid ${isSelected ? 'var(--color-accent)' : 'var(--color-line)'}` }}
                   onClick={() => setSelectedId(grant.id)}
                 >
