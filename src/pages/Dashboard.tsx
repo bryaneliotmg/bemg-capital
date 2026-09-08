@@ -1,19 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, ChevronDown } from 'lucide-react';
+import { ChevronDown, Loader2 } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
-import { FUNDING_OPPORTUNITIES, readinessBand } from '../data/sampleData';
+import { readinessBand } from '../data/sampleData';
 import { useApplications } from '../context/ApplicationsContext';
+import { useOpportunities } from '../context/OpportunitiesContext';
 
 const DNA_COMPLETENESS = 46;
+
+const compactCurrency = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
+  const { opportunities, loading, error } = useOpportunities();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [readiness, setReadiness] = useState(24);
   const band = readinessBand(readiness);
-  const dashboardGrants = FUNDING_OPPORTUNITIES.slice(0, 4);
+  const dashboardGrants = opportunities.slice(0, 4);
+  const totalIdentified = opportunities.reduce((sum, o) => sum + (o.awardAmount ?? 0), 0);
 
   return (
     <div className="panel-enter">
@@ -55,10 +65,9 @@ export function Dashboard() {
           <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
             Active Matches
           </div>
-          <div className="font-serif text-[32px] font-semibold">{FUNDING_OPPORTUNITIES.length}</div>
-          <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-verified bg-verified/10 border border-verified/25 px-2.5 py-1 rounded-full">
-            <ArrowUp className="w-2.5 h-2.5" />
-            +3 this week
+          <div className="font-serif text-[32px] font-semibold">{loading ? '—' : opportunities.length}</div>
+          <div className="mt-2 text-[11.5px] text-ink-3">
+            {loading ? 'Loading real federal opportunities…' : 'Federal grants, via Grants.gov'}
           </div>
         </div>
 
@@ -66,8 +75,12 @@ export function Dashboard() {
           <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
             Funding Identified
           </div>
-          <div className="font-serif text-[32px] font-semibold">$185K</div>
-          <div className="mt-2 text-[11.5px] text-ink-3">across {FUNDING_OPPORTUNITIES.length} open opportunities</div>
+          <div className="font-serif text-[32px] font-semibold">
+            {loading ? '—' : totalIdentified > 0 ? compactCurrency.format(totalIdentified) : 'N/A'}
+          </div>
+          <div className="mt-2 text-[11.5px] text-ink-3">
+            {loading ? ' ' : `across ${opportunities.length} open opportunities`}
+          </div>
         </div>
       </div>
 
@@ -76,56 +89,73 @@ export function Dashboard() {
           <div className="text-[13px] font-extrabold uppercase tracking-wide text-ink-2 mb-3.5">
             Matched Opportunities
           </div>
-          <div className="flex flex-col gap-3.5">
-            {dashboardGrants.map((grant) => {
-              const expanded = expandedId === grant.id;
-              return (
-                <div
-                  key={grant.id}
-                  className="bg-surface border border-line rounded-2xl px-5 py-[18px] cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => setExpandedId(expanded ? null : grant.id)}
-                >
-                  <GrantSummaryRow
-                    grant={grant}
-                    trailing={
-                      <ChevronDown
-                        className="w-4 h-4 text-ink-3 shrink-0 transition-transform duration-150"
-                        style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                      />
-                    }
-                  />
-                  {expanded && (
-                    <div className="mt-4 pt-4 border-t border-line">
-                      <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
-                        Why you matched
+          {loading ? (
+            <div className="glass-card p-10 flex items-center justify-center gap-2.5 text-ink-3">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm font-semibold">Loading real federal opportunities…</span>
+            </div>
+          ) : error ? (
+            <div className="glass-card p-10 text-center text-sm font-semibold text-ink-3">
+              Couldn't load opportunities: {error}
+            </div>
+          ) : dashboardGrants.length === 0 ? (
+            <div className="glass-card p-10 text-center text-sm font-semibold text-ink-3">
+              No eligible opportunities synced yet.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3.5">
+              {dashboardGrants.map((grant) => {
+                const expanded = expandedId === grant.id;
+                return (
+                  <div
+                    key={grant.id}
+                    className="bg-surface border border-line rounded-2xl px-5 py-[18px] cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => setExpandedId(expanded ? null : grant.id)}
+                  >
+                    <GrantSummaryRow
+                      grant={grant}
+                      trailing={
+                        <ChevronDown
+                          className="w-4 h-4 text-ink-3 shrink-0 transition-transform duration-150"
+                          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        />
+                      }
+                    />
+                    {expanded && (
+                      <div className="mt-4 pt-4 border-t border-line">
+                        <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
+                          Why you matched
+                        </div>
+                        <div className="flex flex-col gap-2 mb-4">
+                          {grant.evidence.map((ev) => (
+                            <div key={ev} className="flex items-start gap-2 text-[12.5px] text-ink-2">
+                              <span className="w-[5px] h-[5px] rounded-full bg-accent mt-1.5 shrink-0" />
+                              {ev}
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          className="glass-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startApplication(grant);
+                            navigate('/applications');
+                          }}
+                        >
+                          {hasApplication(grant.id) ? 'View Application' : 'Start Application'}
+                        </button>
                       </div>
-                      <div className="flex flex-col gap-2 mb-4">
-                        {grant.evidence.map((ev) => (
-                          <div key={ev} className="flex items-start gap-2 text-[12.5px] text-ink-2">
-                            <span className="w-[5px] h-[5px] rounded-full bg-accent mt-1.5 shrink-0" />
-                            {ev}
-                          </div>
-                        ))}
-                      </div>
-                      <button
-                        className="glass-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startApplication(grant);
-                          navigate('/applications');
-                        }}
-                      >
-                        {hasApplication(grant.id) ? 'View Application' : 'Start Application'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <button className="link-btn mt-3.5 text-[12.5px] font-bold" onClick={() => navigate('/grants')}>
-            View all {FUNDING_OPPORTUNITIES.length} matches →
-          </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {!loading && opportunities.length > 0 && (
+            <button className="link-btn mt-3.5 text-[12.5px] font-bold" onClick={() => navigate('/grants')}>
+              View all {opportunities.length} matches →
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col gap-[18px]">

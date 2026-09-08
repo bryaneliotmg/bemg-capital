@@ -35,96 +35,6 @@ export const OPPORTUNITY_TYPE_LABEL: Record<OpportunityType, string> = {
   ACCELERATOR: 'Accelerator',
 };
 
-export interface FundingOpportunity {
-  id: string;
-  opportunityType: OpportunityType;
-  name: string;
-  funder: string;
-  amount: string;
-  matchPct: number;
-  deadline: string;
-  status: OpportunityStatus;
-  evidence: string[];
-}
-
-export const FUNDING_OPPORTUNITIES: FundingOpportunity[] = [
-  {
-    id: 'g1',
-    opportunityType: 'GRANT',
-    name: 'Mississippi Small Business Innovation Grant',
-    funder: 'MS Development Authority',
-    amount: '$10,000 – $25,000',
-    matchPct: 94,
-    deadline: '18 days',
-    status: 'new',
-    evidence: [
-      'Revenue $250K–$2M — verified via QuickBooks sync',
-      'Mississippi-registered LLC — verified via Secretary of State',
-      'Operating 3+ years — verified, 6 years on file',
-    ],
-  },
-  {
-    id: 'g2',
-    opportunityType: 'GRANT',
-    name: 'USDA Rural Business Development Grant',
-    funder: 'USDA Rural Development',
-    amount: '$25,000 – $75,000',
-    matchPct: 88,
-    deadline: '34 days',
-    status: 'new',
-    evidence: [
-      'Located in eligible rural area — verified via address',
-      'For-profit small business — verified via entity type',
-      'Job creation plan on file — self-reported',
-    ],
-  },
-  {
-    id: 'g3',
-    opportunityType: 'GRANT',
-    name: 'Local Craft Manufacturing Fund',
-    funder: 'Delta Regional Authority',
-    amount: '$15,000 – $50,000',
-    matchPct: 81,
-    deadline: '9 days',
-    status: 'in_progress',
-    evidence: [
-      'Manufacturing NAICS code — verified',
-      '3+ years operating history — verified',
-      'Regional economic impact — self-reported',
-    ],
-  },
-  {
-    id: 'g4',
-    opportunityType: 'GRANT',
-    name: 'Minority Business Development Grant',
-    funder: 'MBDA',
-    amount: '$5,000 – $20,000',
-    matchPct: 76,
-    deadline: '52 days',
-    status: 'new',
-    evidence: [
-      'Woman-owned business — verified via certification',
-      'Under $1M revenue — verified',
-      'Growth plan documented — self-reported',
-    ],
-  },
-  {
-    id: 'g5',
-    opportunityType: 'GRANT',
-    name: 'Community Development Block Grant',
-    funder: 'HUD / State of Mississippi',
-    amount: '$50,000 – $150,000',
-    matchPct: 63,
-    deadline: '61 days',
-    status: 'new',
-    evidence: [
-      'Job creation for LMI persons — needs additional verification',
-      'Located in qualifying census tract — verified',
-      'Facility expansion plan — self-reported',
-    ],
-  },
-];
-
 export interface Application {
   grantId: string;
   name: string;
@@ -133,9 +43,28 @@ export interface Application {
   deadline: string;
 }
 
-export const DEFAULT_APPLICATIONS: Application[] = [
-  { grantId: 'g3', name: 'Local Craft Manufacturing Fund', opportunityType: 'GRANT', status: 'draft', deadline: '9 days' },
-  { grantId: 'g_old', name: 'MS Rural Small Business Grant (2023)', opportunityType: 'GRANT', status: 'awarded', deadline: '—' },
+// No applications yet — bEMG hasn't used the platform to apply for anything, and
+// matched opportunities now come from the real Grants.gov sync (src/lib/opportunities.ts)
+// rather than this file, so there are no fictional ids left to seed against.
+export const DEFAULT_APPLICATIONS: Application[] = [];
+
+// Keywords grounded in bEMG's actual Identity/Operating DNA ("Brand Management, AI
+// Consulting & Web Development"), used for deterministic title/description overlap
+// scoring in src/lib/matching.ts — not fabricated, drawn from the real profile above.
+export const BUSINESS_PROFILE_KEYWORDS = [
+  'small business',
+  'marketing',
+  'brand',
+  'branding',
+  'consulting',
+  'artificial intelligence',
+  ' ai ',
+  'website',
+  'web development',
+  'digital',
+  'technology',
+  'social media',
+  'advertising',
 ];
 
 export function ringColorForMatch(pct: number): string {

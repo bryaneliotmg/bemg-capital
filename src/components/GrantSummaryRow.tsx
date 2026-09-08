@@ -1,14 +1,19 @@
 import { Calendar } from 'lucide-react';
 import { Ring } from './Ring';
-import { STATUS_META, ringColorForMatch, type FundingOpportunity } from '../data/sampleData';
+import { STATUS_META, ringColorForMatch } from '../data/sampleData';
+import { useApplications } from '../context/ApplicationsContext';
+import type { MatchedOpportunity } from '../lib/opportunities';
 
 interface GrantSummaryRowProps {
-  grant: FundingOpportunity;
+  grant: MatchedOpportunity;
   trailing?: React.ReactNode;
 }
 
 export function GrantSummaryRow({ grant, trailing }: GrantSummaryRowProps) {
-  const status = STATUS_META[grant.status];
+  const { applications } = useApplications();
+  const existingApp = applications.find((a) => a.grantId === grant.id);
+  const status = existingApp ? STATUS_META[existingApp.status] : STATUS_META.new;
+
   return (
     <div className="flex items-center gap-4">
       <Ring pct={grant.matchPct} color={ringColorForMatch(grant.matchPct)} />
@@ -25,7 +30,7 @@ export function GrantSummaryRow({ grant, trailing }: GrantSummaryRowProps) {
         </div>
         <div className="text-[11.5px] text-ink-3 mt-1 flex items-center gap-1 justify-end">
           <Calendar className="w-3 h-3" />
-          {grant.deadline} left
+          {grant.deadline}
         </div>
       </div>
       {trailing}

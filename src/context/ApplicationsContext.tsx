@@ -1,10 +1,16 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { DEFAULT_APPLICATIONS, type Application, type FundingOpportunity } from '../data/sampleData';
+import { DEFAULT_APPLICATIONS, type Application } from '../data/sampleData';
+
+interface StartableOpportunity {
+  id: string;
+  name: string;
+  deadline: string;
+}
 
 interface ApplicationsContextValue {
   applications: Application[];
   hasApplication: (grantId: string) => boolean;
-  startApplication: (grant: FundingOpportunity) => void;
+  startApplication: (opportunity: StartableOpportunity) => void;
 }
 
 const ApplicationsContext = createContext<ApplicationsContextValue | null>(null);
@@ -14,10 +20,10 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
 
   const hasApplication = (grantId: string) => applications.some((a) => a.grantId === grantId);
 
-  const startApplication = (grant: FundingOpportunity) => {
-    if (hasApplication(grant.id)) return;
+  const startApplication = (opportunity: StartableOpportunity) => {
+    if (hasApplication(opportunity.id)) return;
     setApplications((prev) => [
-      { grantId: grant.id, name: grant.name, opportunityType: grant.opportunityType, status: 'draft', deadline: grant.deadline },
+      { grantId: opportunity.id, name: opportunity.name, opportunityType: 'GRANT', status: 'draft', deadline: opportunity.deadline },
       ...prev,
     ]);
   };
