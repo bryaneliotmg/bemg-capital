@@ -2,6 +2,7 @@ interface FactLike {
   label: string;
   value: string;
   status: string;
+  multiline?: boolean;
 }
 
 interface OpportunityLike {
@@ -44,6 +45,12 @@ ${missing.length ? `1. These fields are still missing: ${missing.join(', ')}. Fo
 // Same purpose as buildOrgInfoPrompt, but for the general Identity profile rather than
 // a specific grant — useful for getting the registration facts right before ever
 // applying anywhere, not tied to any one opportunity's context.
+//
+// Identity mixes two genuinely different kinds of field: registration facts you look
+// up somewhere (EIN, UEI, Legal Name...) and the Company Description, which is the
+// owner's own story to write, not a document to go find. Lumping a missing Company
+// Description into "tell me where to find this" is the wrong instruction — it needs
+// its own branch that asks the AI to help draft it through conversation instead.
 export function buildIdentityPrompt(fields: FactLike[]): string {
   const factLines = fields
     .map((f) => {
@@ -52,16 +59,37 @@ export function buildIdentityPrompt(fields: FactLike[]): string {
     })
     .join('\n');
 
-  const missing = fields.filter((f) => f.status === 'required').map((f) => f.label);
-  const unconfirmed = fields.filter((f) => f.status === 'inferred').map((f) => f.label);
+  const registrationFields = fields.filter((f) => !f.multiline);
+  const storyFields = fields.filter((f) => f.multiline);
+  const missing = registrationFields.filter((f) => f.status === 'required').map((f) => f.label);
+  const unconfirmed = registrationFields.filter((f) => f.status === 'inferred').map((f) => f.label);
+  const missingStory = storyFields.filter((f) => f.status === 'required').map((f) => f.label);
 
-  return `I'm completing my business's official identity/registration profile — the facts that federal grant applications, loan applications, and other formal submissions will draw from. Please do NOT invent or guess a specific value for anything below — only tell me where to find the real answer or what to double-check.
+  const tasks: string[] = [];
+  if (missing.length) {
+    tasks.push(
+      `These registration fields are still missing: ${missing.join(', ')}. For each, tell me exactly where I'd go get it (e.g. which government site, which document I should already have) — not a made-up value.`,
+    );
+  }
+  if (unconfirmed.length) {
+    tasks.push(
+      `These fields are unconfirmed and may not exactly match my official registration: ${unconfirmed.join(', ')}. Tell me specifically what document I should check them against (e.g. Articles of Organization, my IRS EIN confirmation letter, my SAM.gov registration) so they match exactly.`,
+    );
+  }
+  if (missingStory.length) {
+    tasks.push(
+      `${missingStory.join(', ')} isn't a registration fact to look up — it's my own story. Ask me a few questions about what my business actually does, who it serves, and what makes it different, then draft a paragraph from my answers that I can edit. Don't invent specifics about my business I haven't told you.`,
+    );
+  }
+  tasks.push('Flag anything else above that looks like it might not hold up to that level of scrutiny.');
+
+  return `I'm completing my business's official identity profile — the facts (and story) that federal grant applications, loan applications, and other formal submissions will draw from. Please do NOT invent or guess a specific value for anything below — only tell me where to find the real answer, what to double-check, or help me articulate it myself.
 
 MY BUSINESS PROFILE (as currently on file):
 ${factLines}
 
 WHAT I NEED HELP WITH:
-${missing.length ? `1. These fields are still missing: ${missing.join(', ')}. For each, tell me exactly where I'd go get it (e.g. which government site, which document I should already have) — not a made-up value.\n` : ''}${unconfirmed.length ? `2. These fields are unconfirmed and may not exactly match my official registration: ${unconfirmed.join(', ')}. Tell me specifically what document I should check them against (e.g. Articles of Organization, my IRS EIN confirmation letter, my SAM.gov registration) so they match exactly.\n` : ''}3. Flag anything else above that looks like it might not hold up to that level of scrutiny.`;
+${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
 }
 
 interface SectionLike {

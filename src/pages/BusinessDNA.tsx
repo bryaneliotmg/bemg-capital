@@ -101,7 +101,7 @@ export function BusinessDNA() {
   const isEditingActive = isEditable && editingTab === activeTab;
 
   async function handleCopyIdentityPrompt() {
-    const fields = fieldsByTab.identity.map((f) => ({ label: f.label, value: f.value, status: f.status }));
+    const fields = fieldsByTab.identity.map((f) => ({ label: f.label, value: f.value, status: f.status, multiline: f.multiline }));
     await navigator.clipboard.writeText(buildIdentityPrompt(fields));
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2500);
