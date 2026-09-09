@@ -47,23 +47,29 @@ ${missing.length ? `1. These fields are still missing: ${missing.join(', ')}. Fo
 // applying anywhere, not tied to any one opportunity's context.
 //
 // Identity mixes two genuinely different kinds of field: registration facts you look
-// up somewhere (EIN, UEI, Legal Name...) and the Company Description, which is the
-// owner's own story to write, not a document to go find. Lumping a missing Company
-// Description into "tell me where to find this" is the wrong instruction — it needs
-// its own branch that asks the AI to help draft it through conversation instead.
-export function buildIdentityPrompt(fields: FactLike[]): string {
-  const factLines = fields
+// up somewhere (EIN, UEI, Legal Name...) and the Company Description, which isn't a
+// document to go find — it should be drafted directly from the richer facts already
+// on file elsewhere (Business Model, Products & Services, Market, etc.), the same
+// single-shot "extract from what's given" pattern as the other two prompts, not a
+// back-and-forth conversation. `supportingFacts` supplies that raw material.
+export function buildIdentityPrompt(identityFields: FactLike[], supportingFacts: FactLike[] = []): string {
+  const factLines = identityFields
     .map((f) => {
       const tag = f.status === 'required' ? 'MISSING' : f.status === 'inferred' ? 'unconfirmed — may not be exact' : 'confirmed';
       return `- ${f.label}: ${f.value} [${tag}]`;
     })
     .join('\n');
 
-  const registrationFields = fields.filter((f) => !f.multiline);
-  const storyFields = fields.filter((f) => f.multiline);
+  const registrationFields = identityFields.filter((f) => !f.multiline);
+  const storyFields = identityFields.filter((f) => f.multiline);
   const missing = registrationFields.filter((f) => f.status === 'required').map((f) => f.label);
   const unconfirmed = registrationFields.filter((f) => f.status === 'inferred').map((f) => f.label);
   const missingStory = storyFields.filter((f) => f.status === 'required').map((f) => f.label);
+
+  const supportingLines = supportingFacts
+    .filter((f) => f.value && f.value !== 'Not yet provided')
+    .map((f) => `- ${f.label}: ${f.value}`)
+    .join('\n');
 
   const tasks: string[] = [];
   if (missing.length) {
@@ -78,16 +84,16 @@ export function buildIdentityPrompt(fields: FactLike[]): string {
   }
   if (missingStory.length) {
     tasks.push(
-      `${missingStory.join(', ')} isn't a registration fact to look up — it's my own story. Ask me a few questions about what my business actually does, who it serves, and what makes it different, then draft a paragraph from my answers that I can edit. Don't invent specifics about my business I haven't told you.`,
+      `${missingStory.join(', ')} isn't a registration fact to look up — draft it directly using the "supporting business context" above (not the identity facts): what the business does, who it serves, and why it matters. Ground it strictly in those facts; if there isn't enough there to write something specific and true, use a bracketed placeholder rather than inventing detail.`,
     );
   }
   tasks.push('Flag anything else above that looks like it might not hold up to that level of scrutiny.');
 
-  return `I'm completing my business's official identity profile — the facts (and story) that federal grant applications, loan applications, and other formal submissions will draw from. Please do NOT invent or guess a specific value for anything below — only tell me where to find the real answer, what to double-check, or help me articulate it myself.
+  return `I'm completing my business's official identity profile — the facts (and story) that federal grant applications, loan applications, and other formal submissions will draw from. Please do NOT invent or guess a specific value for anything below — only tell me where to find the real answer, what to double-check, or extract from the supporting context I've given you.
 
-MY BUSINESS PROFILE (as currently on file):
+MY IDENTITY PROFILE (as currently on file):
 ${factLines}
-
+${supportingLines ? `\nSUPPORTING BUSINESS CONTEXT (for drafting the Company Description only — not identity facts to verify):\n${supportingLines}\n` : ''}
 WHAT I NEED HELP WITH:
 ${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
 }

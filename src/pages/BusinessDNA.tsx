@@ -101,8 +101,17 @@ export function BusinessDNA() {
   const isEditingActive = isEditable && editingTab === activeTab;
 
   async function handleCopyIdentityPrompt() {
-    const fields = fieldsByTab.identity.map((f) => ({ label: f.label, value: f.value, status: f.status, multiline: f.multiline }));
-    await navigator.clipboard.writeText(buildIdentityPrompt(fields));
+    const identityFields = fieldsByTab.identity.map((f) => ({
+      label: f.label,
+      value: f.value,
+      status: f.status,
+      multiline: f.multiline,
+    }));
+    const supportingFacts = (Object.entries(fieldsByTab) as [EditableTabId, DnaField[]][])
+      .filter(([tab]) => tab !== 'identity')
+      .flatMap(([, fields]) => fields)
+      .map((f) => ({ label: f.label, value: f.value, status: f.status }));
+    await navigator.clipboard.writeText(buildIdentityPrompt(identityFields, supportingFacts));
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2500);
   }
