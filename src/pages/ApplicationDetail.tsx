@@ -33,11 +33,32 @@ const SECTION_DEFS: { id: Section; label: string; desc: string }[] = [
 ];
 
 const STOPWORDS = new Set([
+  // Common function words
   'their', 'which', 'been', 'also', 'such', 'than', 'they', 'them', 'these', 'those',
   'about', 'after', 'before', 'under', 'over', 'more', 'most', 'some', 'each', 'every',
   'other', 'only', 'when', 'where', 'while', 'through', 'include', 'including', 'shall',
-  'should', 'would', 'could', 'within', 'without', 'applicant', 'applicants', 'application',
-  'applications', 'funding', 'opportunity', 'program', 'programs', 'grant', 'grants',
+  'should', 'would', 'could', 'within', 'without',
+  // Grant-administration boilerplate — repeats across nearly every listing regardless
+  // of subject matter, so it isn't a useful topical-alignment signal even though it's
+  // frequent. Deliberately keeps domain/substance words (research, clinical, health,
+  // technology, commercial, innovation, etc.) untouched.
+  'applicant', 'applicants', 'application', 'applications', 'funding', 'opportunity',
+  'program', 'programs', 'grant', 'grants', 'period', 'periods', 'provide', 'provides',
+  'provided', 'providing', 'process', 'processes', 'national', 'institutes', 'institute',
+  'receive', 'receives', 'received', 'receiving', 'review', 'reviews', 'reviewed',
+  'require', 'requires', 'required', 'requirement', 'requirements', 'information',
+  'additional', 'eligible', 'eligibility', 'activities', 'activity', 'specific',
+  'individual', 'individuals', 'organization', 'organizations', 'support', 'supports',
+  'supported', 'supporting', 'project', 'projects', 'public', 'private', 'federal',
+  'government', 'office', 'department', 'agency', 'agencies', 'announcement',
+  'announcements', 'submission', 'submissions', 'submit', 'submitted', 'submitting',
+  'deadline', 'deadlines', 'award', 'awards', 'awarded', 'awarding', 'budget', 'budgets',
+  'proposal', 'proposals', 'document', 'documents', 'guidelines', 'guidance', 'policy',
+  'policies', 'section', 'sections', 'please', 'further', 'details', 'instructions',
+  'instruction', 'based', 'current', 'currently', 'certain', 'various', 'general',
+  'generally', 'relevant', 'related', 'regarding', 'necessary', 'appropriate', 'expected',
+  'existing', 'ensure', 'ensuring', 'means', 'meaning', 'purpose', 'purposes', 'result',
+  'results', 'resulting', 'level', 'levels', 'total', 'years', 'months', 'dates',
 ]);
 
 function extractKeywords(text: string, max = 25): string[] {
@@ -223,6 +244,7 @@ export function ApplicationDetail() {
         },
         businessFacts: buildBusinessFacts(),
         referenceAbstracts: reporterExamples.map((e) => ({ title: e.title, abstract: e.abstract })),
+        targetKeywords: keywordTargets,
       }),
     });
     const body = await res.json();

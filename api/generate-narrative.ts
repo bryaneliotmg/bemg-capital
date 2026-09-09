@@ -24,6 +24,7 @@ interface GenerateBody {
   opportunity: { title: string; funder: string; amount: string; description: string; eligibilityNotes?: string | null };
   businessFacts: BusinessFact[];
   referenceAbstracts?: ReferenceAbstract[];
+  targetKeywords?: string[];
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1500): Promise<T> {
@@ -95,6 +96,11 @@ ${body.opportunity.eligibilityNotes ? `Eligibility notes: ${body.opportunity.eli
 ${
   referenceBlock
     ? `REAL FUNDED EXAMPLES from past awards under the same mechanism — for STRUCTURE AND TONE REFERENCE ONLY. These describe different, unrelated projects. Do NOT copy, reuse, or adapt any specific fact, number, technical claim, or result from them into the applicant's narrative — use them only to calibrate the level of formality, technical depth, and organization typical for this program.\n\n${referenceBlock}\n`
+    : ''
+}
+${
+  body.targetKeywords?.length
+    ? `RECURRING TERMS from this opportunity's own listing: ${body.targetKeywords.join(', ')}. These are a topical-alignment signal, not a checklist — where a term genuinely fits something true about the applicant's project, let it surface naturally. Never force in a term that doesn't truthfully apply, and never let chasing these terms turn the writing into keyword-stuffing; natural, accurate prose always wins over term-matching.\n`
     : ''
 }
 Write a first draft for each of the following narrative sections. Each should be 2-4 focused paragraphs (shorter for Timeline/Budget, which may use short lines) written in the applicant's voice (first person plural, "we"), grounded strictly in the business facts above:
