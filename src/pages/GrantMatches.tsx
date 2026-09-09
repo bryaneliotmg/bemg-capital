@@ -218,6 +218,21 @@ export function GrantMatches() {
                   </div>
                 </div>
 
+                {selected.caveats.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-required/10 border border-required/30 mb-5">
+                    <div className="text-[11px] font-extrabold uppercase tracking-wide text-required mb-1.5">
+                      Before you invest time here
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {selected.caveats.map((c) => (
+                        <div key={c} className="text-[12.5px] text-ink-2 leading-relaxed">
+                          {c}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
                   Why you matched
                 </div>

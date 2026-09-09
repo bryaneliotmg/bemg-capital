@@ -64,11 +64,24 @@ export interface MatchResult {
   eligible: boolean;
   matchPct: number;
   reasons: string[];
+  /** Structural concerns distinct from "why you matched" — things that could make this
+   * opportunity not actually viable despite clearing the eligibility/keyword checks above. */
+  caveats: string[];
 }
 
 // Grants.gov applicant-type facet codes plausible for a for-profit small business.
 const BUSINESS_ELIGIBLE_CODES = new Set(['22', '23', '25', '99']);
 const OPEN_STATUSES = new Set(['posted', 'forecasted']);
+
+// STTR (not SBIR) statutorily requires the small business to have a formal cooperative
+// R&D partnership with a U.S. nonprofit research institution — a named co-PI there, a
+// subcontract, a defined division of labor performing at least 30% of the work. This is
+// real, stable domain knowledge (same basis as the NIH review-criteria detection
+// elsewhere in this app), not something Grants.gov exposes as a structured field, so
+// keyword/eligibility-code matching alone can't catch it — it has to be checked directly.
+function isSttr(title: string): boolean {
+  return /\bSTTR\b/i.test(title) || /\bR4[12]\b/.test(title);
+}
 
 export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessProfile): MatchResult {
   const status = opp.status ?? '';
@@ -78,7 +91,7 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const hasBusinessEligibility = codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c));
 
   if (!isOpen || !hasBusinessEligibility) {
-    return { eligible: false, matchPct: 0, reasons: [] };
+    return { eligible: false, matchPct: 0, reasons: [], caveats: [] };
   }
 
   const reasons: string[] = [];
@@ -122,5 +135,13 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
     }
   }
 
-  return { eligible: true, matchPct: Math.max(0, Math.min(100, score)), reasons };
+  const caveats: string[] = [];
+  if (isSttr(opp.title)) {
+    caveats.push(
+      'STTR requires a formal partnership with a U.S. nonprofit research institution (a named co-PI there, a subcontract) — not confirmed on file. Without one, this mechanism likely isn\'t viable regardless of how well the keywords line up.',
+    );
+    score -= 35;
+  }
+
+  return { eligible: true, matchPct: Math.max(0, Math.min(100, score)), reasons, caveats };
 }

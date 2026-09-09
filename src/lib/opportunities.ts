@@ -19,6 +19,7 @@ export interface MatchedOpportunity {
   deadline: string;
   matchPct: number;
   evidence: string[];
+  caveats: string[];
   eligibilityCodes: string[];
   description: string;
   applicantEligibilityDesc: string | null;
@@ -94,6 +95,7 @@ export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
         deadline: formatDeadline(opp.close_date),
         matchPct: result.matchPct,
         evidence: result.reasons,
+        caveats: result.caveats,
         eligibilityCodes: opp.eligibility_codes ?? [],
         description: opp.description ? stripHtml(opp.description) : 'No description provided.',
         applicantEligibilityDesc: opp.applicant_eligibility_desc ? stripHtml(opp.applicant_eligibility_desc) : null,
