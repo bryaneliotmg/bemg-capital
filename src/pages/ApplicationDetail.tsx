@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Tags,
   Gauge,
+  Copy,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Ring } from '../components/Ring';
@@ -24,6 +25,7 @@ import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { STATUS_META } from '../data/sampleData';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
+import { buildOrgInfoPrompt } from '../lib/prompts';
 
 type Section = 'overview' | 'organization' | 'narrative' | 'review';
 
@@ -244,6 +246,7 @@ export function ApplicationDetail() {
   const [strengthening, setStrengthening] = useState(false);
   const [strengthenLog, setStrengthenLog] = useState<string[]>([]);
   const [strengthenError, setStrengthenError] = useState<string | null>(null);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [placeholderDrafts, setPlaceholderDrafts] = useState<Record<string, string>>({});
 
   const application = grantId ? getApplication(grantId) : undefined;
@@ -265,6 +268,22 @@ export function ApplicationDetail() {
     return { ...mapping, value: field?.value ?? 'Not yet provided', status: field?.status ?? 'required', ready };
   });
   const orgReadyCount = applicationFields.filter((f) => f.ready).length;
+
+  async function handleCopyPrompt() {
+    if (!opportunity) return;
+    const prompt = buildOrgInfoPrompt(
+      applicationFields.map((f) => ({ label: f.label, value: f.value, status: f.status })),
+      {
+        title: opportunity.name,
+        funder: opportunity.funder,
+        description: opportunity.description,
+        eligibilityNotes: opportunity.applicantEligibilityDesc,
+      },
+    );
+    await navigator.clipboard.writeText(prompt);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2500);
+  }
 
   const placeholders = useMemo(() => findPlaceholders(narrative, sections), [narrative, sections]);
 
@@ -695,16 +714,23 @@ export function ApplicationDetail() {
 
           {activeSection === 'organization' && (
             <div className="glass-card p-7">
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5 gap-3">
                 <div className="text-[15px] font-bold">Organization Info</div>
-                <span className="text-[11px] font-bold text-ink-3">
+                <span className="text-[11px] font-bold text-ink-3 shrink-0">
                   {orgReadyCount} of {applicationFields.length} ready
                 </span>
               </div>
-              <div className="text-[12.5px] text-ink-2 mb-3.5">
+              <div className="text-[12.5px] text-ink-2 mb-2">
                 Copied from your Business DNA when you started this application. Fix anything here — it only
                 changes this submission, not your Business DNA or other applications.
               </div>
+              <button
+                className="flex items-center gap-1.5 text-[11.5px] font-bold text-accent mb-3.5"
+                onClick={handleCopyPrompt}
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {promptCopied ? 'Copied — paste into your AI of choice' : 'Copy a prompt for your AI to help fill these in'}
+              </button>
               {applicationFields.map((f) => (
                 <QuickEditField
                   key={f.label}
