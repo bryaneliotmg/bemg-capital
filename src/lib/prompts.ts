@@ -41,6 +41,29 @@ WHAT I NEED HELP WITH:
 ${missing.length ? `1. These fields are still missing: ${missing.join(', ')}. For each, tell me exactly where I'd go get it (e.g. which government site, which document I should already have) — not a made-up value.\n` : ''}${unconfirmed.length ? `2. These fields are unconfirmed and may not exactly match my official registration: ${unconfirmed.join(', ')}. Tell me specifically what document I should check them against (e.g. Articles of Organization, my IRS EIN confirmation letter, my SAM.gov registration) so they match exactly — federal forms are strict about exact matches.\n` : ''}3. Flag anything else above that looks like it might not hold up to that level of scrutiny.`;
 }
 
+// Same purpose as buildOrgInfoPrompt, but for the general Identity profile rather than
+// a specific grant — useful for getting the registration facts right before ever
+// applying anywhere, not tied to any one opportunity's context.
+export function buildIdentityPrompt(fields: FactLike[]): string {
+  const factLines = fields
+    .map((f) => {
+      const tag = f.status === 'required' ? 'MISSING' : f.status === 'inferred' ? 'unconfirmed — may not be exact' : 'confirmed';
+      return `- ${f.label}: ${f.value} [${tag}]`;
+    })
+    .join('\n');
+
+  const missing = fields.filter((f) => f.status === 'required').map((f) => f.label);
+  const unconfirmed = fields.filter((f) => f.status === 'inferred').map((f) => f.label);
+
+  return `I'm completing my business's official identity/registration profile — the facts that federal grant applications, loan applications, and other formal submissions will draw from. Please do NOT invent or guess a specific value for anything below — only tell me where to find the real answer or what to double-check.
+
+MY BUSINESS PROFILE (as currently on file):
+${factLines}
+
+WHAT I NEED HELP WITH:
+${missing.length ? `1. These fields are still missing: ${missing.join(', ')}. For each, tell me exactly where I'd go get it (e.g. which government site, which document I should already have) — not a made-up value.\n` : ''}${unconfirmed.length ? `2. These fields are unconfirmed and may not exactly match my official registration: ${unconfirmed.join(', ')}. Tell me specifically what document I should check them against (e.g. Articles of Organization, my IRS EIN confirmation letter, my SAM.gov registration) so they match exactly.\n` : ''}3. Flag anything else above that looks like it might not hold up to that level of scrutiny.`;
+}
+
 interface SectionLike {
   label: string;
   guidance: string;

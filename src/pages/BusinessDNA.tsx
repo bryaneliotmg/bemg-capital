@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Check, X, ExternalLink } from 'lucide-react';
+import { Pencil, Check, X, ExternalLink, Copy } from 'lucide-react';
 import { Ring } from '../components/Ring';
 import { cn } from '../lib/utils';
 import { DNA_TAB_DEFS, evidenceCaption, type DnaField, type DnaTabDef, type EvidenceStatus } from '../data/sampleData';
 import { EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
+import { buildIdentityPrompt } from '../lib/prompts';
 import { useBusinessDNA, type EditableTabId } from '../context/BusinessDNAContext';
 
 const TAB_CONTENT: Record<EditableTabId, { title: string; subtitle: string }> = {
@@ -81,10 +82,18 @@ export function BusinessDNA() {
   const location = useLocation();
   const initialTab = (location.state as { tab?: DnaTabDef['id'] } | null)?.tab ?? 'identity';
   const [activeTab, setActiveTab] = useState<DnaTabDef['id']>(initialTab);
+  const [promptCopied, setPromptCopied] = useState(false);
   const { fieldsByTab, editingTab, draft, startEdit, cancelEdit, saveEdit, updateDraftValue } = useBusinessDNA();
 
   const isEditable = activeTab !== 'readiness';
   const isEditingActive = isEditable && editingTab === activeTab;
+
+  async function handleCopyIdentityPrompt() {
+    const fields = fieldsByTab.identity.map((f) => ({ label: f.label, value: f.value, status: f.status }));
+    await navigator.clipboard.writeText(buildIdentityPrompt(fields));
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2500);
+  }
 
   return (
     <div className="panel-enter flex gap-6 items-start">
@@ -129,10 +138,18 @@ export function BusinessDNA() {
                   </button>
                 </div>
               ) : (
-                <button className="glass-btn-outline shrink-0" onClick={() => startEdit(activeTab)}>
-                  <Pencil className="w-3.5 h-3.5" />
-                  Edit
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeTab === 'identity' && (
+                    <button className="glass-btn-outline" onClick={handleCopyIdentityPrompt}>
+                      <Copy className="w-3.5 h-3.5" />
+                      {promptCopied ? 'Copied — paste into your AI' : 'Copy a prompt for your AI'}
+                    </button>
+                  )}
+                  <button className="glass-btn-outline" onClick={() => startEdit(activeTab)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                    Edit
+                  </button>
+                </div>
               )}
             </div>
             {(isEditingActive ? draft! : fieldsByTab[activeTab]).map((field, i) => (
