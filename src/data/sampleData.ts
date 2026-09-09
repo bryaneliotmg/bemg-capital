@@ -117,30 +117,70 @@ export const FINANCIAL_FIELDS: DnaField[] = [
   { label: '2024 Tax Return', value: 'Not yet provided', status: 'required', sourceLabel: 'Upload to unlock Financial DNA' },
 ];
 
-export const OPERATING_FIELDS: DnaField[] = [
-  {
-    label: 'Business Model',
-    value: 'Done-for-you subscription platform for solo entrepreneurs and small service businesses',
-    status: 'verified',
-    sourceLabel: 'bemg-platform company profile · synced today',
-  },
-  {
-    label: 'Products & Services',
-    value: 'Social Media Automation, Website Design & Management, App Development, AI Receptionist, Digital Business Card, Lead Manager, Signal Newsletter, Directory Listing',
-    status: 'verified',
-    sourceLabel: 'bemg-platform company profile · synced today',
-  },
-  { label: 'Customers', value: '605 contacts in CRM', status: 'verified', sourceLabel: 'bemg-platform contacts table · live' },
-  { label: 'Content Activity', value: '85 posts drafted · 79 published', status: 'verified', sourceLabel: 'bemg-platform content table · live' },
-  { label: 'Newsletter', value: '14 Signal issues sent', status: 'verified', sourceLabel: 'bemg-platform signals table · live' },
-  {
-    label: 'Market',
-    value: 'Solo entrepreneurs & small service businesses — barbershops, salons, restaurants, spas, fitness studios, consultants',
-    status: 'verified',
-    sourceLabel: 'bemg-platform company profile · synced today',
-  },
-  { label: 'Team', value: 'Not yet provided', status: 'required', sourceLabel: 'Employee count not recorded yet' },
-];
+// A tenant's "website_info" comes from bemg-platform's Brand Voice feature
+// (website_profiles.brand_snapshot.website_info) — it only exists once a tenant
+// has run a website scan there, so it must stay optional. buildOperatingFields
+// below degrades to just the base fields when it's null, never fabricating a
+// tagline/positioning that wasn't actually generated for this business.
+export interface WebsiteInfo {
+  tagline: string;
+  about: string;
+}
+
+// Real one-time snapshot for bEMG's own tenant (354f6633-0b25-491f-b7b3-b7a1e7f02ac4),
+// pulled from website_profiles.brand_snapshot.website_info · generated 2026-09-03.
+const BEMG_WEBSITE_INFO: WebsiteInfo | null = {
+  tagline: 'Your business deserves to look as good as it actually is.',
+  about:
+    'bEMG builds and runs the digital infrastructure so solo operators can focus on the work that actually moves their business. It connects your website, social media, phone, and contacts into one automated system running on your behalf.',
+};
+
+function buildOperatingFields(websiteInfo: WebsiteInfo | null): DnaField[] {
+  const base: DnaField[] = [
+    {
+      label: 'Business Model',
+      value: 'Done-for-you subscription platform for solo entrepreneurs and small service businesses',
+      status: 'verified',
+      sourceLabel: 'bemg-platform company profile · synced today',
+    },
+    {
+      label: 'Products & Services',
+      value: 'Social Media Automation, Website Design & Management, App Development, AI Receptionist, Digital Business Card, Lead Manager, Signal Newsletter, Directory Listing',
+      status: 'verified',
+      sourceLabel: 'bemg-platform company profile · synced today',
+    },
+    { label: 'Customers', value: '605 contacts in CRM', status: 'verified', sourceLabel: 'bemg-platform contacts table · live' },
+    { label: 'Content Activity', value: '85 posts drafted · 79 published', status: 'verified', sourceLabel: 'bemg-platform content table · live' },
+    { label: 'Newsletter', value: '14 Signal issues sent', status: 'verified', sourceLabel: 'bemg-platform signals table · live' },
+    {
+      label: 'Market',
+      value: 'Solo entrepreneurs & small service businesses — barbershops, salons, restaurants, spas, fitness studios, consultants',
+      status: 'verified',
+      sourceLabel: 'bemg-platform company profile · synced today',
+    },
+    { label: 'Team', value: 'Not yet provided', status: 'required', sourceLabel: 'Employee count not recorded yet' },
+  ];
+
+  if (!websiteInfo) return base;
+
+  return [
+    ...base,
+    {
+      label: 'Tagline',
+      value: websiteInfo.tagline,
+      status: 'inferred',
+      sourceLabel: 'bemg-platform Brand Voice · website scan · Sep 3, 2026',
+    },
+    {
+      label: 'Brand Positioning',
+      value: websiteInfo.about,
+      status: 'inferred',
+      sourceLabel: 'bemg-platform Brand Voice · website scan · Sep 3, 2026',
+    },
+  ];
+}
+
+export const OPERATING_FIELDS: DnaField[] = buildOperatingFields(BEMG_WEBSITE_INFO);
 
 export const GROWTH_FIELDS: DnaField[] = [
   { label: 'Trajectory', value: 'Not yet provided', status: 'required', sourceLabel: 'No growth trajectory on file yet' },
