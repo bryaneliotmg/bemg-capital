@@ -4,6 +4,7 @@ import { Dashboard } from './pages/Dashboard';
 import { BusinessDNA } from './pages/BusinessDNA';
 import { GrantMatches } from './pages/GrantMatches';
 import { Applications } from './pages/Applications';
+import { ApplicationDetail } from './pages/ApplicationDetail';
 import { ApplicationsProvider } from './context/ApplicationsContext';
 import { OpportunitiesProvider } from './context/OpportunitiesContext';
 import { BusinessDNAProvider } from './context/BusinessDNAContext';
@@ -21,6 +22,7 @@ export default function App() {
                 <Route path="business-dna" element={<BusinessDNA />} />
                 <Route path="grants" element={<GrantMatches />} />
                 <Route path="applications" element={<Applications />} />
+                <Route path="applications/:grantId" element={<ApplicationDetail />} />
               </Route>
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

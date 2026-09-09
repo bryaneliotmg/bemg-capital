@@ -139,7 +139,7 @@ export function Dashboard() {
                           onClick={(e) => {
                             e.stopPropagation();
                             startApplication(grant);
-                            navigate('/applications');
+                            navigate(`/applications/${grant.id}`);
                           }}
                         >
                           {hasApplication(grant.id) ? 'View Application' : 'Start Application'}

@@ -21,6 +21,8 @@ interface BusinessDNAContextValue {
   updateDraftValue: (index: number, value: string) => void;
   /** Look up a single field's current (saved, not draft) value by tab + label — used to pre-fill things like grant application fields. */
   getField: (tab: EditableTabId, label: string) => DnaField | undefined;
+  /** Save one field directly, outside the section-wide edit/draft flow — for quick inline fixes (e.g. from an Application page). */
+  setFieldValue: (tab: EditableTabId, label: string, value: string) => void;
 }
 
 const BusinessDNAContext = createContext<BusinessDNAContextValue | null>(null);
@@ -67,9 +69,28 @@ export function BusinessDNAProvider({ children }: { children: ReactNode }) {
     return fieldsByTab[tab].find((f) => f.label === label);
   }
 
+  function setFieldValue(tab: EditableTabId, label: string, value: string) {
+    setFieldsByTab((prev) => ({
+      ...prev,
+      [tab]: prev[tab].map((f) =>
+        f.label === label ? { ...f, value, status: 'verified' as const, sourceLabel: 'Owner input · just now' } : f,
+      ),
+    }));
+  }
+
   return (
     <BusinessDNAContext.Provider
-      value={{ fieldsByTab, editingTab, draft, startEdit, cancelEdit, saveEdit, updateDraftValue, getField }}
+      value={{
+        fieldsByTab,
+        editingTab,
+        draft,
+        startEdit,
+        cancelEdit,
+        saveEdit,
+        updateDraftValue,
+        getField,
+        setFieldValue,
+      }}
     >
       {children}
     </BusinessDNAContext.Provider>

@@ -9,10 +9,18 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   '/applications': { title: 'Applications', subtitle: 'Track every submission to outcome' },
 };
 
+function getPageMeta(pathname: string) {
+  if (PAGE_META[pathname]) return PAGE_META[pathname];
+  if (pathname.startsWith('/applications/')) {
+    return { title: 'Application', subtitle: 'Working through one opportunity, section by section' };
+  }
+  return PAGE_META['/dashboard'];
+}
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const meta = PAGE_META[location.pathname] ?? PAGE_META['/dashboard'];
+  const meta = getPageMeta(location.pathname);
 
   return (
     <div className="flex min-h-screen bg-paper text-ink font-sans text-sm">

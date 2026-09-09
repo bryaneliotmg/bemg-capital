@@ -330,7 +330,7 @@ export function GrantMatches() {
                   className="glass-btn w-full justify-center"
                   onClick={() => {
                     startApplication(selected);
-                    navigate('/applications');
+                    navigate(`/applications/${selected.id}`);
                   }}
                 >
                   {hasApplication(selected.id) ? 'View Application' : 'Start Application'}
