@@ -16,7 +16,8 @@
     "lucide-react": "latest",
     "clsx": "latest",
     "tailwind-merge": "latest",
-    "@supabase/supabase-js": "^2.103.0"
+    "@supabase/supabase-js": "^2.103.0",
+    "@google/genai": "^1.29.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",

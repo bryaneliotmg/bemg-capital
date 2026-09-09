@@ -4,7 +4,9 @@
   "installCommand": "npm install",
   "functions": {
     "api/cron/sync-grants.ts": { "maxDuration": 60 },
-    "api/search-grants.ts": { "maxDuration": 60 }
+    "api/search-grants.ts": { "maxDuration": 60 },
+    "api/generate-narrative.ts": { "maxDuration": 60 },
+    "api/reporter-examples.ts": { "maxDuration": 30 }
   },
   "crons": [{ "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" }],
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]

@@ -7,11 +7,10 @@ export interface NarrativeSectionDef {
   prompt: string;
 }
 
-// The near-universal shape of a competitive federal/foundation grant narrative —
-// not specific to any one opportunity's published rubric (we don't have that data),
-// but this structure and what each section is scored on is consistent across the
-// vast majority of discretionary grant programs.
-export const NARRATIVE_SECTIONS: NarrativeSectionDef[] = [
+// Generic fallback — the near-universal shape of a competitive federal/foundation
+// grant narrative, for agencies whose specific published rubric we don't confidently
+// know. NIH and NSF (below) have well-documented, stable rubrics we use instead.
+export const GENERIC_SECTIONS: NarrativeSectionDef[] = [
   {
     id: 'need',
     label: 'Statement of Need',
@@ -62,3 +61,107 @@ export const NARRATIVE_SECTIONS: NarrativeSectionDef[] = [
     prompt: 'How will you measure success, and how does this continue after the grant ends?',
   },
 ];
+
+// NIH's five core review criteria — used for essentially every NIH grant mechanism
+// (R01, R21, R41/R42 STTR, R43/R44 SBIR, etc.), publicly documented NIH review policy.
+export const NIH_SECTIONS: NarrativeSectionDef[] = [
+  {
+    id: 'significance',
+    label: 'Significance',
+    guidance:
+      "NIH's most heavily weighted criterion. Reviewers ask: does this address an important problem, and would success meaningfully move the field or improve health? Strong methodology can't rescue weak significance.",
+    prompt: 'What critical problem does this address, and how would solving it change the field or improve outcomes?',
+  },
+  {
+    id: 'innovation',
+    label: 'Innovation',
+    guidance:
+      'NIH explicitly rewards challenging an existing paradigm or applying a novel concept/method — not just doing more of the same, better. Reviewers specifically look for what is genuinely new here.',
+    prompt: 'What about your concept, approach, or methodology is genuinely novel — not just incrementally better?',
+  },
+  {
+    id: 'approach',
+    label: 'Approach',
+    guidance:
+      'The most heavily scrutinized section for feasibility. Reviewers check whether your specific aims, methodology, and analysis plan are rigorous, and whether you have anticipated likely pitfalls.',
+    prompt: 'What are your specific aims, and exactly how will you execute and evaluate each one?',
+  },
+  {
+    id: 'investigators',
+    label: 'Investigator(s)',
+    guidance:
+      'Reviewers assess whether the specific people on this project — not the company in the abstract — are well-suited to it, based on training, track record, and role.',
+    prompt: 'Who is doing this work, and what in their background makes them credible for it?',
+  },
+  {
+    id: 'environment',
+    label: 'Environment',
+    guidance:
+      "Does the applicant's organization provide the resources, facilities, and institutional support needed to actually execute this?",
+    prompt: 'What resources, facilities, or institutional support do you have in place to carry this out?',
+  },
+];
+
+export const NIH_COMMERCIAL_POTENTIAL_SECTION: NarrativeSectionDef = {
+  id: 'commercial_potential',
+  label: 'Commercial Potential',
+  guidance:
+    'Required specifically for SBIR/STTR mechanisms. NIH wants a credible path from this research to an actual product or service reaching the market — not just good science.',
+  prompt: 'What is the commercial path from this project to a real product, and who would buy or use it?',
+};
+
+// NSF's two co-equal, explicitly-named review criteria — its own exact language,
+// used by reviewers directly.
+export const NSF_SECTIONS: NarrativeSectionDef[] = [
+  {
+    id: 'intellectual_merit',
+    label: 'Intellectual Merit',
+    guidance:
+      "NSF's own exact phrase, and reviewers score against it directly. Ask: does this advance knowledge or understanding within or across fields?",
+    prompt: 'How does this project advance knowledge or understanding in your field?',
+  },
+  {
+    id: 'broader_impacts',
+    label: 'Broader Impacts',
+    guidance:
+      "NSF's other co-equal criterion — often under-weighted by first-time applicants. Benefits to society, education, workforce, or the broader community count as much as the core science.",
+    prompt: 'Beyond the direct technical results, who else benefits from this project, and how?',
+  },
+  GENERIC_SECTIONS[1], // Project Description & Approach
+  GENERIC_SECTIONS[3], // Organizational Capacity
+  GENERIC_SECTIONS[4], // Timeline
+  GENERIC_SECTIONS[5], // Budget Narrative
+];
+
+export type RubricFamily = 'NIH' | 'NSF' | 'GENERIC';
+
+export function detectRubricFamily(agencyCode: string | null | undefined): RubricFamily {
+  const agency = (agencyCode ?? '').toUpperCase();
+  if (agency.includes('NIH')) return 'NIH';
+  if (agency.includes('NSF')) return 'NSF';
+  return 'GENERIC';
+}
+
+function isSbirSttr(title: string): boolean {
+  return /SBIR|STTR|\bR4[1-4]\b/i.test(title);
+}
+
+export function getNarrativeSections(agencyCode: string | null | undefined, title: string): NarrativeSectionDef[] {
+  const family = detectRubricFamily(agencyCode);
+  if (family === 'NIH') {
+    return isSbirSttr(title) ? [...NIH_SECTIONS, NIH_COMMERCIAL_POTENTIAL_SECTION] : NIH_SECTIONS;
+  }
+  if (family === 'NSF') return NSF_SECTIONS;
+  return GENERIC_SECTIONS;
+}
+
+export function getRubricLabel(agencyCode: string | null | undefined, title: string): string {
+  const family = detectRubricFamily(agencyCode);
+  if (family === 'NIH') {
+    return isSbirSttr(title)
+      ? "NIH's 5 core review criteria + Commercial Potential (SBIR/STTR)"
+      : "NIH's 5 core review criteria (Significance, Innovation, Approach, Investigator(s), Environment)";
+  }
+  if (family === 'NSF') return "NSF's Intellectual Merit / Broader Impacts criteria";
+  return 'Common structure across most federal/foundation grants — this program\'s specific rubric is not in our data';
+}

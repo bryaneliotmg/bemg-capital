@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus } from '../data/sampleData';
-import { NARRATIVE_SECTIONS } from '../data/narrativeSections';
+import type { NarrativeSectionDef } from '../data/narrativeSections';
 
 interface StartableOpportunity {
   id: string;
@@ -18,7 +18,8 @@ interface ApplicationsContextValue {
   setApplicationStatus: (grantId: string, status: OpportunityStatus) => void;
   getNarrative: (grantId: string) => Record<string, string>;
   updateNarrative: (grantId: string, sectionId: string, value: string) => void;
-  narrativeProgress: (grantId: string) => { done: number; total: number };
+  setNarrativeBulk: (grantId: string, sections: Record<string, string>) => void;
+  narrativeProgress: (grantId: string, sections: NarrativeSectionDef[]) => { done: number; total: number };
 }
 
 const ApplicationsContext = createContext<ApplicationsContextValue | null>(null);
@@ -51,10 +52,17 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const narrativeProgress = (grantId: string) => {
+  const setNarrativeBulk = (grantId: string, sections: Record<string, string>) => {
+    setNarrativeByGrant((prev) => ({
+      ...prev,
+      [grantId]: { ...(prev[grantId] ?? {}), ...sections },
+    }));
+  };
+
+  const narrativeProgress = (grantId: string, sections: NarrativeSectionDef[]) => {
     const narrative = narrativeByGrant[grantId] ?? {};
-    const done = NARRATIVE_SECTIONS.filter((s) => (narrative[s.id] ?? '').trim().length > 0).length;
-    return { done, total: NARRATIVE_SECTIONS.length };
+    const done = sections.filter((s) => (narrative[s.id] ?? '').trim().length > 0).length;
+    return { done, total: sections.length };
   };
 
   return (
@@ -67,6 +75,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
         setApplicationStatus,
         getNarrative,
         updateNarrative,
+        setNarrativeBulk,
         narrativeProgress,
       }}
     >

@@ -25,6 +25,9 @@ export interface MatchedOpportunity {
   announcementUrl: string | null;
   /** Grants.gov's own funding-activity-category labels for this opportunity (e.g. Health, Education) — used to build the category "sections" filter. */
   fundingCategories: FundingCategory[];
+  agencyContactName: string | null;
+  agencyContactEmail: string | null;
+  agencyContactPhone: string | null;
 }
 
 function formatAmount(floor: number | null, ceiling: number | null): string {
@@ -62,7 +65,7 @@ function stripHtml(html: string): string {
 }
 
 const SELECT_COLUMNS =
-  'id, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories';
+  'id, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories, agency_contact_name, agency_contact_email, agency_contact_phone';
 
 export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
   const { data, error } = await supabase.from('funding_opportunities').select(SELECT_COLUMNS);
@@ -96,6 +99,9 @@ export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
         applicantEligibilityDesc: opp.applicant_eligibility_desc ? stripHtml(opp.applicant_eligibility_desc) : null,
         announcementUrl: opp.announcement_url,
         fundingCategories: opp.funding_categories ?? [],
+        agencyContactName: opp.agency_contact_name,
+        agencyContactEmail: opp.agency_contact_email,
+        agencyContactPhone: opp.agency_contact_phone,
       };
       return matched;
     })

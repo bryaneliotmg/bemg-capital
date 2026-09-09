@@ -20,6 +20,9 @@ export interface RawFundingOpportunity {
   announcement_url: string | null;
   applicant_eligibility_desc: string | null;
   funding_categories: FundingCategory[] | null;
+  agency_contact_name: string | null;
+  agency_contact_email: string | null;
+  agency_contact_phone: string | null;
 }
 
 export interface FundingCategory {

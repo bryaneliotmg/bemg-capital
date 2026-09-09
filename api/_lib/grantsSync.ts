@@ -104,6 +104,11 @@ export async function syncGrants(opts: { keyword?: string; rows?: number }): Pro
         : [];
       const announcementUrl: string | null = detailSource.fundingDescLinkUrl ?? null;
       const applicantEligibilityDesc: string | null = detailSource.applicantEligibilityDesc ?? null;
+      // Agency contact fields are nested under synopsis/forecast, same level as
+      // synopsisDesc/awardFloor — confirmed against real stored raw_detail.
+      const agencyContactName: string | null = detailSource.agencyContactName ?? null;
+      const agencyContactEmail: string | null = detailSource.agencyContactEmail ?? null;
+      const agencyContactPhone: string | null = detailSource.agencyContactPhone ?? null;
 
       const { error } = await supabase.from('funding_opportunities').upsert({
         id: String(hit.id),
@@ -123,6 +128,9 @@ export async function syncGrants(opts: { keyword?: string; rows?: number }): Pro
         description,
         announcement_url: announcementUrl,
         applicant_eligibility_desc: applicantEligibilityDesc,
+        agency_contact_name: agencyContactName,
+        agency_contact_email: agencyContactEmail,
+        agency_contact_phone: agencyContactPhone,
         raw_detail: detail,
         synced_at: new Date().toISOString(),
       });
