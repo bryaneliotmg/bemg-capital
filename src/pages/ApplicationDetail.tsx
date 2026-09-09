@@ -14,8 +14,10 @@ import {
   BookOpen,
   AlertTriangle,
   Tags,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Ring } from '../components/Ring';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
@@ -91,6 +93,42 @@ interface ReporterExample {
   abstract: string;
   fiscalYear: number;
   org: string;
+}
+
+interface Placeholder {
+  sectionLabel: string;
+  text: string;
+}
+
+function findPlaceholders(
+  narrative: Record<string, string>,
+  sections: { id: string; label: string }[],
+): Placeholder[] {
+  const found: Placeholder[] = [];
+  for (const section of sections) {
+    const matches = (narrative[section.id] ?? '').match(/\[[^\]]+\]/g) ?? [];
+    for (const text of matches) found.push({ sectionLabel: section.label, text });
+  }
+  return found;
+}
+
+interface AlignmentAssessment {
+  rating: string;
+  score: number;
+  reason: string;
+}
+
+const RATING_COLOR: Record<string, string> = {
+  Strong: 'text-verified',
+  Adequate: 'text-inferred',
+  Weak: 'text-required',
+  'Not Addressed': 'text-required',
+};
+
+function alignmentRingColor(score: number): string {
+  if (score >= 80) return '#059669';
+  if (score >= 55) return '#d97706';
+  return '#8a8178';
 }
 
 function QuickEditField({
@@ -178,6 +216,9 @@ export function ApplicationDetail() {
   const [generatingAll, setGeneratingAll] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [alignment, setAlignment] = useState<Record<string, AlignmentAssessment> | null>(null);
+  const [assessing, setAssessing] = useState(false);
+  const [assessError, setAssessError] = useState<string | null>(null);
 
   const application = grantId ? getApplication(grantId) : undefined;
   const opportunity = opportunities.find((o) => o.id === grantId);
@@ -195,6 +236,52 @@ export function ApplicationDetail() {
     return { ...mapping, value: field?.value ?? 'Not yet provided', ready };
   });
   const orgReadyCount = applicationFields.filter((f) => f.ready).length;
+
+  const placeholders = useMemo(() => findPlaceholders(narrative, sections), [narrative, sections]);
+  const narrativeSnapshot = useMemo(() => JSON.stringify(narrative), [narrative]);
+  const [assessedSnapshot, setAssessedSnapshot] = useState<string | null>(null);
+  const isAlignmentStale = alignment != null && assessedSnapshot !== narrativeSnapshot;
+
+  const contentAvg =
+    alignment && Object.keys(alignment).length
+      ? Math.round(Object.values(alignment).reduce((sum, a) => sum + a.score, 0) / Object.values(alignment).length)
+      : null;
+  const orgFraction = applicationFields.length ? orgReadyCount / applicationFields.length : 0;
+  const placeholderPenalty = Math.min(placeholders.length * 5, 30);
+  const alignmentScore =
+    contentAvg != null
+      ? Math.max(0, Math.min(100, Math.round(0.7 * contentAvg + 0.3 * orgFraction * 100) - placeholderPenalty))
+      : null;
+
+  async function handleAssessAlignment() {
+    if (!opportunity) return;
+    setAssessError(null);
+    setAssessing(true);
+    try {
+      const res = await fetch('/api/assess-alignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sections: sections.map((s) => ({ id: s.id, label: s.label, guidance: s.guidance })),
+          narrative,
+          opportunity: {
+            title: opportunity.name,
+            funder: opportunity.funder,
+            description: opportunity.description,
+            eligibilityNotes: opportunity.applicantEligibilityDesc,
+          },
+        }),
+      });
+      const responseBody = await res.json();
+      if (!res.ok) throw new Error(responseBody.error || 'Assessment failed');
+      setAlignment(responseBody.assessments);
+      setAssessedSnapshot(narrativeSnapshot);
+    } catch (err) {
+      setAssessError(err instanceof Error ? err.message : 'Assessment failed');
+    } finally {
+      setAssessing(false);
+    }
+  }
 
   useEffect(() => {
     if (!opportunity?.name) return;
@@ -617,52 +704,165 @@ export function ApplicationDetail() {
           )}
 
           {activeSection === 'review' && (
-            <div className="glass-card p-7">
-              <div className="text-[15px] font-bold mb-1.5">Review &amp; Submit</div>
-              <div className="text-[12.5px] text-ink-2 mb-5">
-                A last honest look before this leaves your desk.
-              </div>
+            <div className="flex flex-col gap-4">
+              <div className="glass-card p-7">
+                <div className="text-[15px] font-bold mb-1.5">Review &amp; Submit</div>
+                <div className="text-[12.5px] text-ink-2 mb-5">
+                  A last honest look before this leaves your desk.
+                </div>
 
-              <div className="flex items-center justify-between p-4 rounded-xl bg-surface-2 mb-3">
-                <div className="text-[13px] font-semibold">Organization Info</div>
-                <div
-                  className={cn(
-                    'text-[11px] font-bold uppercase tracking-wide',
-                    orgReadyCount === applicationFields.length ? 'text-verified' : 'text-inferred',
-                  )}
-                >
-                  {orgReadyCount} of {applicationFields.length} ready
+                <div className="flex items-center justify-between p-4 rounded-xl bg-surface-2 mb-3">
+                  <div className="text-[13px] font-semibold">Organization Info</div>
+                  <div
+                    className={cn(
+                      'text-[11px] font-bold uppercase tracking-wide',
+                      orgReadyCount === applicationFields.length ? 'text-verified' : 'text-inferred',
+                    )}
+                  >
+                    {orgReadyCount} of {applicationFields.length} ready
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-xl bg-surface-2 mb-3">
+                  <div className="text-[13px] font-semibold">Project Narrative</div>
+                  <div
+                    className={cn(
+                      'text-[11px] font-bold uppercase tracking-wide',
+                      progress.done === progress.total ? 'text-verified' : 'text-inferred',
+                    )}
+                  >
+                    {progress.done} of {progress.total} sections drafted
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-xl bg-surface-2 mb-5">
+                  <div className="text-[13px] font-semibold">Unresolved placeholders</div>
+                  <div
+                    className={cn(
+                      'text-[11px] font-bold uppercase tracking-wide',
+                      placeholders.length === 0 ? 'text-verified' : 'text-required',
+                    )}
+                  >
+                    {placeholders.length === 0 ? 'None found' : `${placeholders.length} remaining`}
+                  </div>
+                </div>
+
+                {placeholders.length > 0 && (
+                  <div className="mb-5">
+                    <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2">
+                      Still needs real content before this is submission-ready
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {placeholders.map((p, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[12px] text-ink-2">
+                          <span className="w-1 h-1 rounded-full bg-required mt-[7px] shrink-0" />
+                          <span>
+                            <span className="font-semibold">{p.sectionLabel}:</span> {p.text}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(orgReadyCount < applicationFields.length || progress.done < progress.total) && (
+                  <div className="text-[12px] text-required font-semibold mb-5">
+                    Some sections are still incomplete — you can still submit, but a reviewer will see the gaps
+                    too.
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    className="glass-btn"
+                    onClick={() => grantId && setApplicationStatus(grantId, 'submitted')}
+                  >
+                    Mark as Submitted
+                  </button>
+                  <button className="glass-btn-outline" onClick={() => navigate('/applications')}>
+                    Save &amp; Come Back Later
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-4 rounded-xl bg-surface-2 mb-5">
-                <div className="text-[13px] font-semibold">Project Narrative</div>
-                <div
-                  className={cn(
-                    'text-[11px] font-bold uppercase tracking-wide',
-                    progress.done === progress.total ? 'text-verified' : 'text-inferred',
-                  )}
-                >
-                  {progress.done} of {progress.total} sections drafted
-                </div>
-              </div>
 
-              {(orgReadyCount < applicationFields.length || progress.done < progress.total) && (
-                <div className="text-[12px] text-required font-semibold mb-5">
-                  Some sections are still incomplete — you can still submit, but a reviewer will see the gaps
-                  too.
+              <div className="glass-card p-7">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Gauge className="w-4 h-4 text-accent" />
+                  <div className="text-[15px] font-bold">Alignment Score</div>
                 </div>
-              )}
+                <div className="text-[12px] text-ink-2 mb-5">
+                  Reflects how closely this draft addresses this program's own stated review criteria — it is not a
+                  prediction of funding decisions, which depend on the competing applicant pool and available program
+                  funds, neither of which any application's content can tell you.
+                </div>
 
-              <div className="flex items-center gap-3">
-                <button
-                  className="glass-btn"
-                  onClick={() => grantId && setApplicationStatus(grantId, 'submitted')}
-                >
-                  Mark as Submitted
-                </button>
-                <button className="glass-btn-outline" onClick={() => navigate('/applications')}>
-                  Save &amp; Come Back Later
-                </button>
+                {assessError && (
+                  <div className="text-[12px] font-semibold text-required mb-4 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    {assessError}
+                  </div>
+                )}
+
+                {alignment == null ? (
+                  <button className="glass-btn flex items-center gap-1.5" onClick={handleAssessAlignment} disabled={assessing}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {assessing ? 'Assessing…' : 'Assess Alignment'}
+                  </button>
+                ) : (
+                  <>
+                    {isAlignmentStale && (
+                      <div className="text-[12px] font-semibold text-inferred mb-4">
+                        The narrative has changed since this was last assessed —{' '}
+                        <button className="link-btn text-[12px] font-semibold" onClick={handleAssessAlignment}>
+                          re-run it
+                        </button>{' '}
+                        for an up-to-date score.
+                      </div>
+                    )}
+                    <div className="flex items-center gap-6 mb-6">
+                      <Ring pct={alignmentScore ?? 0} color={alignmentRingColor(alignmentScore ?? 0)} size={72} fontSize={17} />
+                      <div className="flex flex-col gap-1.5 text-[11.5px] text-ink-2">
+                        <div>
+                          Rubric content quality: <span className="font-bold text-ink">{contentAvg}/100</span>
+                        </div>
+                        <div>
+                          Organization Info completeness:{' '}
+                          <span className="font-bold text-ink">{Math.round(orgFraction * 100)}%</span>
+                        </div>
+                        {placeholderPenalty > 0 && (
+                          <div>
+                            Placeholder penalty:{' '}
+                            <span className="font-bold text-required">-{placeholderPenalty}</span>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        className="glass-btn-outline flex items-center gap-1.5 ml-auto self-start"
+                        onClick={handleAssessAlignment}
+                        disabled={assessing}
+                      >
+                        <RefreshCw className={cn('w-3.5 h-3.5', assessing && 'animate-spin')} />
+                        {assessing ? 'Re-assessing…' : 'Re-assess'}
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      {sections.map((s) => {
+                        const a = alignment[s.id];
+                        if (!a) return null;
+                        return (
+                          <div key={s.id} className="p-4 rounded-xl bg-surface-2">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="text-[13px] font-bold">{s.label}</div>
+                              <span className={cn('text-[11px] font-bold uppercase tracking-wide', RATING_COLOR[a.rating] ?? 'text-ink-2')}>
+                                {a.rating} · {a.score}/100
+                              </span>
+                            </div>
+                            <div className="text-[12px] text-ink-2">{a.reason}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
