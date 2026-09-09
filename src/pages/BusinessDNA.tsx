@@ -32,19 +32,31 @@ function FieldRow({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className="field-row">
+    <div className={cn('field-row', field.multiline && 'items-start')}>
       <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">{field.label}</div>
       <div>
         {editing ? (
-          <input
-            value={field.value}
-            onChange={(e) => onChange?.(e.target.value)}
-            placeholder="Not yet provided"
-            className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-1.5 text-sm font-semibold outline-none focus:border-accent"
-          />
+          field.multiline ? (
+            <textarea
+              value={field.value === 'Not yet provided' ? '' : field.value}
+              onChange={(e) => onChange?.(e.target.value)}
+              placeholder="What does your business do, who do you serve, and why does it matter? Write this in your own words — it's the story every AI-assisted draft in this app will build on."
+              rows={6}
+              className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-2 text-[13px] leading-relaxed outline-none focus:border-accent resize-y"
+            />
+          ) : (
+            <input
+              value={field.value}
+              onChange={(e) => onChange?.(e.target.value)}
+              placeholder="Not yet provided"
+              className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-1.5 text-sm font-semibold outline-none focus:border-accent"
+            />
+          )
         ) : (
           <>
-            <div className="text-sm font-semibold">{field.value}</div>
+            <div className={cn(field.multiline ? 'text-[13px] leading-relaxed whitespace-pre-line' : 'text-sm font-semibold')}>
+              {field.value}
+            </div>
             {field.status === 'required' && EXTERNAL_ACQUIRE_LINKS[field.label] && (
               <a
                 href={EXTERNAL_ACQUIRE_LINKS[field.label].url}

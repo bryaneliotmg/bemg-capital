@@ -91,6 +91,9 @@ export interface DnaField {
   status: EvidenceStatus;
   sourceLabel: string;
   sparkline?: boolean;
+  /** Renders as a textarea, not a single-line input — for fields meant to be a real
+   * paragraph the owner writes and refines themselves, not a discrete fact. */
+  multiline?: boolean;
 }
 
 const EVIDENCE_LABEL: Record<EvidenceStatus, string> = {
@@ -104,6 +107,13 @@ export function evidenceCaption(field: DnaField): string {
 }
 
 export const IDENTITY_FIELDS: DnaField[] = [
+  {
+    label: 'Company Description',
+    value: 'Not yet provided',
+    status: 'required',
+    sourceLabel: 'Your story — write this yourself; it grounds every AI-assisted draft in this app',
+    multiline: true,
+  },
   { label: 'Legal Name', value: 'bEMG Business', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
   { label: 'Industry', value: 'Brand Management, AI Consulting & Web Development', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
   { label: 'Website', value: 'bryaneliotmg.com', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
