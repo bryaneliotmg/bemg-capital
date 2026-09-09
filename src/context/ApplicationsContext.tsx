@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus } from '../data/sampleData';
 import type { NarrativeSectionDef } from '../data/narrativeSections';
+import { useAuth } from './AuthContext';
 import {
   fetchApplications,
   fetchNarratives,
@@ -38,6 +39,7 @@ const ApplicationsContext = createContext<ApplicationsContextValue | null>(null)
 const NARRATIVE_SAVE_DEBOUNCE_MS = 1000;
 
 export function ApplicationsProvider({ children }: { children: ReactNode }) {
+  const { tenantId } = useAuth();
   const [applications, setApplications] = useState<Application[]>(DEFAULT_APPLICATIONS);
   const [narrativeByGrant, setNarrativeByGrant] = useState<NarrativeByGrant>({});
   const [loading, setLoading] = useState(true);
@@ -45,6 +47,10 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     Promise.all([fetchApplications(), fetchNarratives()])
       .then(([apps, narratives]) => {
@@ -59,7 +65,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tenantId]);
 
   function runPersist(fn: () => Promise<void>) {
     setSaveStatus('saving');
@@ -75,7 +81,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const getApplication = (grantId: string) => applications.find((a) => a.grantId === grantId);
 
   const startApplication = (opportunity: StartableOpportunity) => {
-    if (hasApplication(opportunity.id)) return;
+    if (hasApplication(opportunity.id) || !tenantId) return;
     const app: Application = {
       grantId: opportunity.id,
       name: opportunity.name,
@@ -84,7 +90,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       deadline: opportunity.deadline,
     };
     setApplications((prev) => [app, ...prev]);
-    runPersist(() => insertApplication(app));
+    runPersist(() => insertApplication(app, tenantId));
   };
 
   const setApplicationStatus = (grantId: string, status: OpportunityStatus) => {
@@ -99,6 +105,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       ...prev,
       [grantId]: { ...(prev[grantId] ?? {}), [sectionId]: value },
     }));
+    if (!tenantId) return;
 
     const key = `${grantId}:${sectionId}`;
     const existing = debounceTimers.current.get(key);
@@ -108,7 +115,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       key,
       setTimeout(() => {
         debounceTimers.current.delete(key);
-        runPersist(() => persistNarrativeSection(grantId, sectionId, value));
+        runPersist(() => persistNarrativeSection(grantId, sectionId, value, tenantId));
       }, NARRATIVE_SAVE_DEBOUNCE_MS),
     );
   };
@@ -118,7 +125,8 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       ...prev,
       [grantId]: { ...(prev[grantId] ?? {}), ...sections },
     }));
-    runPersist(() => persistNarrativeBulk(grantId, sections));
+    if (!tenantId) return;
+    runPersist(() => persistNarrativeBulk(grantId, sections, tenantId));
   };
 
   const narrativeProgress = (grantId: string, sections: NarrativeSectionDef[]) => {

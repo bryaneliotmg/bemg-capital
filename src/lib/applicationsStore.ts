@@ -29,13 +29,14 @@ export async function fetchApplications(): Promise<Application[]> {
   }));
 }
 
-export async function insertApplication(app: Application): Promise<void> {
+export async function insertApplication(app: Application, tenantId: string): Promise<void> {
   const { error } = await supabase.from('applications').insert({
     grant_id: app.grantId,
     name: app.name,
     opportunity_type: app.opportunityType,
     status: app.status,
     deadline: app.deadline,
+    tenant_id: tenantId,
   });
   if (error) throw error;
 }
@@ -59,21 +60,31 @@ export async function fetchNarratives(): Promise<Record<string, Record<string, s
   return byGrant;
 }
 
-export async function persistNarrativeSection(grantId: string, sectionId: string, content: string): Promise<void> {
+export async function persistNarrativeSection(
+  grantId: string,
+  sectionId: string,
+  content: string,
+  tenantId: string,
+): Promise<void> {
   const { error } = await supabase
     .from('application_narratives')
     .upsert(
-      { grant_id: grantId, section_id: sectionId, content, updated_at: new Date().toISOString() },
+      { grant_id: grantId, section_id: sectionId, content, tenant_id: tenantId, updated_at: new Date().toISOString() },
       { onConflict: 'grant_id,section_id' },
     );
   if (error) throw error;
 }
 
-export async function persistNarrativeBulk(grantId: string, sections: Record<string, string>): Promise<void> {
+export async function persistNarrativeBulk(
+  grantId: string,
+  sections: Record<string, string>,
+  tenantId: string,
+): Promise<void> {
   const rows = Object.entries(sections).map(([sectionId, content]) => ({
     grant_id: grantId,
     section_id: sectionId,
     content,
+    tenant_id: tenantId,
     updated_at: new Date().toISOString(),
   }));
   const { error } = await supabase.from('application_narratives').upsert(rows, { onConflict: 'grant_id,section_id' });

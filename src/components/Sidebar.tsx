@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutGrid, Dna, Target, FileText, Lock } from 'lucide-react';
+import { LayoutGrid, Dna, Target, FileText, Lock, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
 
 const navItemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -9,6 +10,10 @@ const navItemClass = ({ isActive }: { isActive: boolean }) =>
   );
 
 export function Sidebar() {
+  const { session, signOut } = useAuth();
+  const email = session?.user?.email ?? '';
+  const initial = email ? email[0].toUpperCase() : 'B';
+
   return (
     <aside className="w-64 shrink-0 bg-sidebar flex flex-col py-6 px-[18px]">
       <div className="flex items-center gap-2.5 px-1.5 pb-6">
@@ -68,12 +73,19 @@ export function Sidebar() {
 
       <div className="border-t border-sidebar-hover pt-4 flex items-center gap-2.5">
         <div className="w-[34px] h-[34px] rounded-full bg-accent text-white flex items-center justify-center font-extrabold text-sm shrink-0">
-          B
+          {initial}
         </div>
-        <div className="min-w-0">
-          <div className="text-[12.5px] font-bold truncate text-sidebar-text-active">bEMG Business</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12.5px] font-bold truncate text-sidebar-text-active">{email || 'bEMG Business'}</div>
           <div className="text-[10.5px] text-sidebar-text font-semibold">Funding OS plan</div>
         </div>
+        <button
+          className="text-sidebar-text hover:text-sidebar-text-active shrink-0"
+          onClick={() => void signOut()}
+          title="Sign out"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </aside>
   );
