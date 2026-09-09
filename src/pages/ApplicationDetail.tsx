@@ -139,8 +139,16 @@ function QuickEditField({
 export function ApplicationDetail() {
   const { grantId } = useParams<{ grantId: string }>();
   const navigate = useNavigate();
-  const { getApplication, setApplicationStatus, getNarrative, updateNarrative, setNarrativeBulk, narrativeProgress } =
-    useApplications();
+  const {
+    getApplication,
+    setApplicationStatus,
+    getNarrative,
+    updateNarrative,
+    setNarrativeBulk,
+    narrativeProgress,
+    loading: applicationsLoading,
+    saveStatus,
+  } = useApplications();
   const { opportunities } = useOpportunities();
   const { fieldsByTab, getField, setFieldValue } = useBusinessDNA();
   const [activeSection, setActiveSection] = useState<Section>('overview');
@@ -250,6 +258,10 @@ export function ApplicationDetail() {
     }
   }
 
+  if (applicationsLoading) {
+    return <div className="glass-card p-10 text-center text-ink-3 text-sm font-semibold">Loading application…</div>;
+  }
+
   if (!application) {
     return (
       <div className="glass-card p-10 text-center text-ink-3">
@@ -281,7 +293,14 @@ export function ApplicationDetail() {
             {opportunity?.funder ?? 'Federal agency'} · Deadline: {application.deadline}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
+          {saveStatus !== 'idle' && (
+            <span className="text-[11px] font-bold text-ink-3">
+              {saveStatus === 'saving' && 'Saving…'}
+              {saveStatus === 'saved' && 'All changes saved'}
+              {saveStatus === 'error' && <span className="text-required">Couldn't save — check connection</span>}
+            </span>
+          )}
           <span className={`w-2 h-2 rounded-full inline-block ${STATUS_META[application.status].dotClass}`} />
           <span className="text-[11px] font-bold uppercase tracking-wide text-ink-2">
             {STATUS_META[application.status].label}

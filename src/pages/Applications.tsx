@@ -5,7 +5,11 @@ import { useApplications } from '../context/ApplicationsContext';
 
 export function Applications() {
   const navigate = useNavigate();
-  const { applications } = useApplications();
+  const { applications, loading } = useApplications();
+
+  if (loading) {
+    return <div className="glass-card p-10 text-center text-ink-3 text-sm font-semibold">Loading applications…</div>;
+  }
 
   if (applications.length === 0) {
     return (

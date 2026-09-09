@@ -1,6 +1,14 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus } from '../data/sampleData';
 import type { NarrativeSectionDef } from '../data/narrativeSections';
+import {
+  fetchApplications,
+  fetchNarratives,
+  insertApplication,
+  persistApplicationStatus,
+  persistNarrativeBulk,
+  persistNarrativeSection,
+} from '../lib/applicationsStore';
 
 interface StartableOpportunity {
   id: string;
@@ -9,9 +17,12 @@ interface StartableOpportunity {
 }
 
 type NarrativeByGrant = Record<string, Record<string, string>>;
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface ApplicationsContextValue {
   applications: Application[];
+  loading: boolean;
+  saveStatus: SaveStatus;
   hasApplication: (grantId: string) => boolean;
   startApplication: (opportunity: StartableOpportunity) => void;
   getApplication: (grantId: string) => Application | undefined;
@@ -24,23 +35,61 @@ interface ApplicationsContextValue {
 
 const ApplicationsContext = createContext<ApplicationsContextValue | null>(null);
 
+const NARRATIVE_SAVE_DEBOUNCE_MS = 1000;
+
 export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const [applications, setApplications] = useState<Application[]>(DEFAULT_APPLICATIONS);
   const [narrativeByGrant, setNarrativeByGrant] = useState<NarrativeByGrant>({});
+  const [loading, setLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchApplications(), fetchNarratives()])
+      .then(([apps, narratives]) => {
+        if (cancelled) return;
+        setApplications(apps);
+        setNarrativeByGrant(narratives);
+      })
+      .catch((err) => console.error('Failed to load saved applications:', err))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function runPersist(fn: () => Promise<void>) {
+    setSaveStatus('saving');
+    fn()
+      .then(() => setSaveStatus('saved'))
+      .catch((err) => {
+        console.error('Failed to save application data:', err);
+        setSaveStatus('error');
+      });
+  }
 
   const hasApplication = (grantId: string) => applications.some((a) => a.grantId === grantId);
   const getApplication = (grantId: string) => applications.find((a) => a.grantId === grantId);
 
   const startApplication = (opportunity: StartableOpportunity) => {
     if (hasApplication(opportunity.id)) return;
-    setApplications((prev) => [
-      { grantId: opportunity.id, name: opportunity.name, opportunityType: 'GRANT', status: 'draft', deadline: opportunity.deadline },
-      ...prev,
-    ]);
+    const app: Application = {
+      grantId: opportunity.id,
+      name: opportunity.name,
+      opportunityType: 'GRANT',
+      status: 'draft',
+      deadline: opportunity.deadline,
+    };
+    setApplications((prev) => [app, ...prev]);
+    runPersist(() => insertApplication(app));
   };
 
   const setApplicationStatus = (grantId: string, status: OpportunityStatus) => {
     setApplications((prev) => prev.map((a) => (a.grantId === grantId ? { ...a, status } : a)));
+    runPersist(() => persistApplicationStatus(grantId, status));
   };
 
   const getNarrative = (grantId: string) => narrativeByGrant[grantId] ?? {};
@@ -50,6 +99,18 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       ...prev,
       [grantId]: { ...(prev[grantId] ?? {}), [sectionId]: value },
     }));
+
+    const key = `${grantId}:${sectionId}`;
+    const existing = debounceTimers.current.get(key);
+    if (existing) clearTimeout(existing);
+    setSaveStatus('saving');
+    debounceTimers.current.set(
+      key,
+      setTimeout(() => {
+        debounceTimers.current.delete(key);
+        runPersist(() => persistNarrativeSection(grantId, sectionId, value));
+      }, NARRATIVE_SAVE_DEBOUNCE_MS),
+    );
   };
 
   const setNarrativeBulk = (grantId: string, sections: Record<string, string>) => {
@@ -57,6 +118,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       ...prev,
       [grantId]: { ...(prev[grantId] ?? {}), ...sections },
     }));
+    runPersist(() => persistNarrativeBulk(grantId, sections));
   };
 
   const narrativeProgress = (grantId: string, sections: NarrativeSectionDef[]) => {
@@ -69,6 +131,8 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     <ApplicationsContext.Provider
       value={{
         applications,
+        loading,
+        saveStatus,
         hasApplication,
         startApplication,
         getApplication,
