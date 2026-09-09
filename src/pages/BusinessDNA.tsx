@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Check, X } from 'lucide-react';
+import { Pencil, Check, X, ExternalLink } from 'lucide-react';
 import { Ring } from '../components/Ring';
 import { cn } from '../lib/utils';
 import { DNA_TAB_DEFS, evidenceCaption, type DnaField, type DnaTabDef, type EvidenceStatus } from '../data/sampleData';
+import { EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { useBusinessDNA, type EditableTabId } from '../context/BusinessDNAContext';
 
 const TAB_CONTENT: Record<EditableTabId, { title: string; subtitle: string }> = {
@@ -43,6 +44,17 @@ function FieldRow({
         ) : (
           <>
             <div className="text-sm font-semibold">{field.value}</div>
+            {field.status === 'required' && EXTERNAL_ACQUIRE_LINKS[field.label] && (
+              <a
+                href={EXTERNAL_ACQUIRE_LINKS[field.label].url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[11px] font-bold text-accent mt-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {EXTERNAL_ACQUIRE_LINKS[field.label].linkLabel}
+              </a>
+            )}
             {field.sparkline && (
               <svg width="110" height="24" viewBox="0 0 110 24" fill="none" className="mt-1">
                 <polyline

@@ -22,7 +22,7 @@ import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { STATUS_META } from '../data/sampleData';
-import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS } from '../data/applicationFields';
+import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
 
 type Section = 'overview' | 'organization' | 'narrative' | 'review';
@@ -142,11 +142,13 @@ function QuickEditField({
   value,
   ready,
   onSave,
+  acquireLink,
 }: {
   label: string;
   value: string;
   ready: boolean;
   onSave: (value: string) => void;
+  acquireLink?: { linkLabel: string; url: string };
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value === 'Not yet provided' ? '' : value);
@@ -189,7 +191,20 @@ function QuickEditField({
   return (
     <div className="field-row">
       <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">{label}</div>
-      <div className={cn('text-sm font-semibold', !ready && 'text-required')}>{value}</div>
+      <div>
+        <div className={cn('text-sm font-semibold', !ready && 'text-required')}>{value}</div>
+        {!ready && acquireLink && (
+          <a
+            href={acquireLink.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[11px] font-bold text-accent mt-1"
+          >
+            <ExternalLink className="w-3 h-3" />
+            {acquireLink.linkLabel}
+          </a>
+        )}
+      </div>
       <button
         className="flex items-center gap-1 text-[11px] font-bold text-ink-3 hover:text-accent justify-self-end"
         onClick={() => setEditing(true)}
@@ -653,6 +668,7 @@ export function ApplicationDetail() {
                   value={f.value}
                   ready={f.ready}
                   onSave={(value) => setFieldValue(f.dnaTab, f.dnaLabel, value)}
+                  acquireLink={EXTERNAL_ACQUIRE_LINKS[f.dnaLabel]}
                 />
               ))}
               <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mt-5 mb-2">

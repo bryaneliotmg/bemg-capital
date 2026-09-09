@@ -30,3 +30,17 @@ export const PROJECT_SPECIFIC_FIELDS = [
   'Project Description / Narrative',
   'Project Period (start – end dates)',
 ];
+
+// For DNA fields that aren't just data entry — they require actually registering with
+// an external authority first. Keyed by the DNA field label (SF424_FIELD_MAP.dnaLabel),
+// shown as a direct link when the field is still missing so "go get one" isn't a dead end.
+export const EXTERNAL_ACQUIRE_LINKS: Record<string, { linkLabel: string; url: string }> = {
+  'EIN / Tax ID': {
+    linkLabel: 'Apply for an EIN at IRS.gov',
+    url: 'https://www.irs.gov/businesses/small-businesses-self-employed/apply-for-an-employer-identification-number-ein-online',
+  },
+  'SAM.gov Unique Entity ID (UEI)': {
+    linkLabel: 'Register for a UEI at SAM.gov',
+    url: 'https://sam.gov/content/entity-registration',
+  },
+};
