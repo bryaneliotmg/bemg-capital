@@ -5,7 +5,7 @@ import { cn } from '../lib/utils';
 const navItemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
     'flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold mb-0.5 transition-colors text-sidebar-text hover:bg-sidebar-hover',
-    isActive && 'bg-accent/20 text-sidebar-text-active',
+    isActive && 'bg-sidebar-active text-sidebar-text-active',
   );
 
 export function Sidebar() {

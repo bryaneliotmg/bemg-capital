@@ -5,21 +5,22 @@
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "IBM Plex Serif", Georgia, serif;
 
-  --color-paper: oklch(95% 0.028 78);
-  --color-surface: oklch(99% 0.01 78);
-  --color-surface-2: oklch(90% 0.035 78);
-  --color-ink: oklch(19% 0.02 60);
-  --color-ink-2: oklch(40% 0.02 60);
-  --color-ink-3: oklch(58% 0.015 60);
-  --color-line: oklch(87% 0.025 75);
-  --color-line-2: oklch(80% 0.03 75);
+  --color-paper: oklch(94% 0.012 75);
+  --color-surface: oklch(99% 0.004 75);
+  --color-surface-2: oklch(90% 0.015 75);
+  --color-ink: oklch(19% 0.015 60);
+  --color-ink-2: oklch(40% 0.014 60);
+  --color-ink-3: oklch(58% 0.011 60);
+  --color-line: oklch(86% 0.013 72);
+  --color-line-2: oklch(79% 0.016 72);
 
-  --color-sidebar: oklch(19% 0.055 255);
-  --color-sidebar-hover: oklch(25% 0.055 255);
-  --color-sidebar-text: oklch(74% 0.02 255);
-  --color-sidebar-text-active: oklch(97% 0.006 255);
+  --color-sidebar: oklch(16% 0.022 255);
+  --color-sidebar-hover: oklch(21% 0.022 255);
+  --color-sidebar-active: oklch(28% 0.02 255);
+  --color-sidebar-text: oklch(66% 0.014 255);
+  --color-sidebar-text-active: oklch(96% 0.005 255);
 
-  --color-accent: oklch(42% 0.15 255);
+  --color-accent: oklch(46% 0.065 233);
 
   --color-verified: oklch(52% 0.13 155);
   --color-inferred: oklch(62% 0.12 75);
