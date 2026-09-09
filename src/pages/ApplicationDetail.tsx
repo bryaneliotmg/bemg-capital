@@ -25,7 +25,7 @@ import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { STATUS_META } from '../data/sampleData';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
-import { buildOrgInfoPrompt } from '../lib/prompts';
+import { buildOrgInfoPrompt, buildNarrativePrompt } from '../lib/prompts';
 
 type Section = 'overview' | 'organization' | 'narrative' | 'review';
 
@@ -247,6 +247,7 @@ export function ApplicationDetail() {
   const [strengthenLog, setStrengthenLog] = useState<string[]>([]);
   const [strengthenError, setStrengthenError] = useState<string | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [narrativePromptCopied, setNarrativePromptCopied] = useState(false);
   const [placeholderDrafts, setPlaceholderDrafts] = useState<Record<string, string>>({});
 
   const application = grantId ? getApplication(grantId) : undefined;
@@ -484,6 +485,23 @@ export function ApplicationDetail() {
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || 'Generation failed');
     return body.sections as Record<string, string>;
+  }
+
+  async function handleCopyNarrativePrompt() {
+    if (!opportunity) return;
+    const prompt = buildNarrativePrompt(
+      sections.map((s) => ({ label: s.label, guidance: s.guidance, prompt: s.prompt })),
+      buildBusinessFacts(),
+      {
+        title: opportunity.name,
+        funder: opportunity.funder,
+        description: opportunity.description,
+        eligibilityNotes: opportunity.applicantEligibilityDesc,
+      },
+    );
+    await navigator.clipboard.writeText(prompt);
+    setNarrativePromptCopied(true);
+    setTimeout(() => setNarrativePromptCopied(false), 2500);
   }
 
   async function handleGenerateAll() {
@@ -765,10 +783,19 @@ export function ApplicationDetail() {
                     {progress.done} of {progress.total} sections drafted
                   </span>
                 </div>
-                <button className="glass-btn flex items-center gap-1.5" onClick={handleGenerateAll} disabled={generatingAll}>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {generatingAll ? 'Drafting…' : 'Generate Full Draft with AI'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="glass-btn-outline flex items-center gap-1.5"
+                    onClick={handleCopyNarrativePrompt}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    {narrativePromptCopied ? 'Copied — paste into your AI' : 'Copy a prompt for your AI'}
+                  </button>
+                  <button className="glass-btn flex items-center gap-1.5" onClick={handleGenerateAll} disabled={generatingAll}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {generatingAll ? 'Drafting…' : 'Generate Full Draft with AI'}
+                  </button>
+                </div>
               </div>
 
               {generateError && (
