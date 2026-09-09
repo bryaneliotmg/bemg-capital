@@ -96,8 +96,12 @@ interface ReporterExample {
 }
 
 interface Placeholder {
+  sectionId: string;
   sectionLabel: string;
   text: string;
+  /** Exact character offset within that section's current narrative text — repeats of the
+   * same bracket text (e.g. multiple "[Number]"s) need this to know which one is which. */
+  index: number;
 }
 
 function findPlaceholders(
@@ -106,8 +110,10 @@ function findPlaceholders(
 ): Placeholder[] {
   const found: Placeholder[] = [];
   for (const section of sections) {
-    const matches = (narrative[section.id] ?? '').match(/\[[^\]]+\]/g) ?? [];
-    for (const text of matches) found.push({ sectionLabel: section.label, text });
+    const text = narrative[section.id] ?? '';
+    for (const m of text.matchAll(/\[[^\]]+\]/g)) {
+      found.push({ sectionId: section.id, sectionLabel: section.label, text: m[0], index: m.index ?? 0 });
+    }
   }
   return found;
 }
@@ -222,6 +228,7 @@ export function ApplicationDetail() {
   const [strengthening, setStrengthening] = useState(false);
   const [strengthenLog, setStrengthenLog] = useState<string[]>([]);
   const [strengthenError, setStrengthenError] = useState<string | null>(null);
+  const [placeholderDrafts, setPlaceholderDrafts] = useState<Record<string, string>>({});
 
   const application = grantId ? getApplication(grantId) : undefined;
   const opportunity = opportunities.find((o) => o.id === grantId);
@@ -241,6 +248,25 @@ export function ApplicationDetail() {
   const orgReadyCount = applicationFields.filter((f) => f.ready).length;
 
   const placeholders = useMemo(() => findPlaceholders(narrative, sections), [narrative, sections]);
+
+  function placeholderKey(p: Placeholder) {
+    return `${p.sectionId}:${p.index}`;
+  }
+
+  function handleFillPlaceholder(p: Placeholder) {
+    if (!grantId) return;
+    const value = (placeholderDrafts[placeholderKey(p)] ?? '').trim();
+    if (!value) return;
+    const currentText = narrative[p.sectionId] ?? '';
+    const newText = currentText.slice(0, p.index) + value + currentText.slice(p.index + p.text.length);
+    updateNarrative(grantId, p.sectionId, newText);
+    setPlaceholderDrafts((prev) => {
+      const next = { ...prev };
+      delete next[placeholderKey(p)];
+      return next;
+    });
+  }
+
   const narrativeSnapshot = useMemo(() => JSON.stringify(narrative), [narrative]);
   const [assessedSnapshot, setAssessedSnapshot] = useState<string | null>(null);
   const isAlignmentStale = alignment != null && assessedSnapshot !== narrativeSnapshot;
@@ -831,17 +857,38 @@ export function ApplicationDetail() {
                 {placeholders.length > 0 && (
                   <div className="mb-5">
                     <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2">
-                      Still needs real content before this is submission-ready
+                      Fill these in directly — the narrative updates as soon as you do
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      {placeholders.map((p, i) => (
-                        <div key={i} className="flex items-start gap-2 text-[12px] text-ink-2">
-                          <span className="w-1 h-1 rounded-full bg-required mt-[7px] shrink-0" />
-                          <span>
-                            <span className="font-semibold">{p.sectionLabel}:</span> {p.text}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="flex flex-col gap-2">
+                      {placeholders.map((p) => {
+                        const key = placeholderKey(p);
+                        return (
+                          <div key={key} className="flex items-center gap-2.5">
+                            <span className="w-1 h-1 rounded-full bg-required shrink-0" />
+                            <div className="text-[12px] text-ink-2 shrink-0">
+                              <span className="font-semibold">{p.sectionLabel}:</span> {p.text}
+                            </div>
+                            <input
+                              value={placeholderDrafts[key] ?? ''}
+                              onChange={(e) =>
+                                setPlaceholderDrafts((prev) => ({ ...prev, [key]: e.target.value }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleFillPlaceholder(p);
+                              }}
+                              placeholder="Type the real value…"
+                              className="flex-1 min-w-0 bg-surface border border-line-2 rounded-lg px-2.5 py-1 text-[12px] outline-none focus:border-accent"
+                            />
+                            <button
+                              className="text-verified shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                              onClick={() => handleFillPlaceholder(p)}
+                              disabled={!(placeholderDrafts[key] ?? '').trim()}
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
