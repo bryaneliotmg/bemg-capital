@@ -6,7 +6,7 @@ import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { ELIGIBILITY_LABELS } from '../lib/matching';
-import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS } from '../data/applicationFields';
+import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, buildOrgInfoSnapshot } from '../data/applicationFields';
 
 const BUSINESS_CODES = new Set(['22', '23', '25', '99']);
 
@@ -329,7 +329,7 @@ export function GrantMatches() {
                 <button
                   className="glass-btn w-full justify-center"
                   onClick={() => {
-                    startApplication(selected);
+                    startApplication(selected, buildOrgInfoSnapshot(getField));
                     navigate(`/applications/${selected.id}`);
                   }}
                 >

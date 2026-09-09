@@ -5,6 +5,8 @@ import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { readinessBand } from '../data/sampleData';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
+import { useBusinessDNA } from '../context/BusinessDNAContext';
+import { buildOrgInfoSnapshot } from '../data/applicationFields';
 
 const DNA_COMPLETENESS = 46;
 
@@ -19,6 +21,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
   const { opportunities, loading, error } = useOpportunities();
+  const { getField } = useBusinessDNA();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [readiness, setReadiness] = useState(24);
   const band = readinessBand(readiness);
@@ -138,7 +141,7 @@ export function Dashboard() {
                           className="glass-btn"
                           onClick={(e) => {
                             e.stopPropagation();
-                            startApplication(grant);
+                            startApplication(grant, buildOrgInfoSnapshot(getField));
                             navigate(`/applications/${grant.id}`);
                           }}
                         >

@@ -35,12 +35,22 @@ export const OPPORTUNITY_TYPE_LABEL: Record<OpportunityType, string> = {
   ACCELERATOR: 'Accelerator',
 };
 
+export interface OrgInfoField {
+  value: string;
+  status: EvidenceStatus;
+}
+
 export interface Application {
   grantId: string;
   name: string;
   opportunityType: OpportunityType;
   status: OpportunityStatus;
   deadline: string;
+  /** A one-time snapshot of SF-424 org fields taken from Business DNA when the
+   * application was started — edited independently per application from then on,
+   * since the same field (e.g. Legal Name) may need to be phrased differently
+   * across different submissions rather than always mirroring the live DNA. */
+  orgInfo: Record<string, OrgInfoField>;
 }
 
 // No applications yet — bEMG hasn't used the platform to apply for anything, and

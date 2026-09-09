@@ -222,6 +222,7 @@ export function ApplicationDetail() {
   const {
     getApplication,
     setApplicationStatus,
+    updateOrgField,
     getNarrative,
     updateNarrative,
     setNarrativeBulk,
@@ -230,7 +231,7 @@ export function ApplicationDetail() {
     saveStatus,
   } = useApplications();
   const { opportunities } = useOpportunities();
-  const { fieldsByTab, getField, setFieldValue } = useBusinessDNA();
+  const { fieldsByTab, getField } = useBusinessDNA();
   const [activeSection, setActiveSection] = useState<Section>('overview');
   const [reporterExamples, setReporterExamples] = useState<ReporterExample[]>([]);
   const [showReferences, setShowReferences] = useState(false);
@@ -255,10 +256,13 @@ export function ApplicationDetail() {
   const rubricLabel = getRubricLabel(opportunity?.agencyCode, opportunity?.name ?? '');
   const progress = grantId ? narrativeProgress(grantId, sections) : { done: 0, total: sections.length };
 
+  // Sourced from this application's own orgInfo snapshot (taken once from Business DNA
+  // when the application was started), not a live read of Business DNA — edits here are
+  // specific to this submission and don't affect the shared DNA record or other applications.
   const applicationFields = SF424_FIELD_MAP.map((mapping) => {
-    const field = getField(mapping.dnaTab, mapping.dnaLabel);
+    const field = application?.orgInfo?.[mapping.dnaLabel];
     const ready = !!field && field.status !== 'required';
-    return { ...mapping, value: field?.value ?? 'Not yet provided', ready };
+    return { ...mapping, value: field?.value ?? 'Not yet provided', status: field?.status ?? 'required', ready };
   });
   const orgReadyCount = applicationFields.filter((f) => f.ready).length;
 
@@ -567,7 +571,46 @@ export function ApplicationDetail() {
 
         <div className="flex-1 min-w-0 panel-enter">
           {activeSection === 'overview' && (
-            <div className="glass-card p-7">
+            <div className="flex flex-col gap-4">
+              <div className="glass-card p-6">
+                <div className="flex items-center justify-between mb-3.5">
+                  <div className="text-[13px] font-bold">Applying As</div>
+                  <button
+                    className="text-[11px] font-bold text-accent"
+                    onClick={() => setActiveSection('organization')}
+                  >
+                    Edit in Organization Info
+                  </button>
+                </div>
+                <div className="text-[11.5px] text-ink-2 mb-4">
+                  A copy of your Business DNA taken when you started this application — edits here are specific to
+                  this submission.
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+                  {applicationFields
+                    .filter((f) => f.dnaTab === 'identity')
+                    .map((f) => (
+                      <div key={f.label} className="min-w-0">
+                        <div className="text-[10px] font-extrabold uppercase tracking-wide text-ink-3">
+                          {f.label}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span
+                            className={cn(
+                              'w-1.5 h-1.5 rounded-full shrink-0',
+                              f.status === 'verified' ? 'bg-verified' : f.status === 'inferred' ? 'bg-inferred' : 'bg-required',
+                            )}
+                          />
+                          <span className={cn('text-[13px] font-semibold truncate', f.status === 'required' && 'text-required')}>
+                            {f.value}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div className="glass-card p-7">
               <div className="text-[15px] font-bold mb-1.5">Overview</div>
               <div className="text-[12.5px] text-ink-2 mb-5">What this grant asks for, at a glance.</div>
               <div className="grid grid-cols-2 gap-4 mb-6">
@@ -646,6 +689,7 @@ export function ApplicationDetail() {
               <button className="glass-btn mt-1" onClick={() => setActiveSection('organization')}>
                 Start with Organization Info
               </button>
+              </div>
             </div>
           )}
 
@@ -658,8 +702,8 @@ export function ApplicationDetail() {
                 </span>
               </div>
               <div className="text-[12.5px] text-ink-2 mb-3.5">
-                Pulled from your Business DNA. Fix anything here — it updates your DNA everywhere, not just this
-                application.
+                Copied from your Business DNA when you started this application. Fix anything here — it only
+                changes this submission, not your Business DNA or other applications.
               </div>
               {applicationFields.map((f) => (
                 <QuickEditField
@@ -667,7 +711,7 @@ export function ApplicationDetail() {
                   label={f.label}
                   value={f.value}
                   ready={f.ready}
-                  onSave={(value) => setFieldValue(f.dnaTab, f.dnaLabel, value)}
+                  onSave={(value) => grantId && updateOrgField(grantId, f.dnaLabel, value)}
                   acquireLink={EXTERNAL_ACQUIRE_LINKS[f.dnaLabel]}
                 />
               ))}

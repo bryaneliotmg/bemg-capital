@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Application, OpportunityStatus, OpportunityType } from '../data/sampleData';
+import type { Application, OpportunityStatus, OpportunityType, OrgInfoField } from '../data/sampleData';
 
 interface ApplicationRow {
   grant_id: string;
@@ -7,6 +7,7 @@ interface ApplicationRow {
   opportunity_type: string;
   status: string;
   deadline: string;
+  org_info: Record<string, OrgInfoField> | null;
 }
 
 interface NarrativeRow {
@@ -18,7 +19,7 @@ interface NarrativeRow {
 export async function fetchApplications(): Promise<Application[]> {
   const { data, error } = await supabase
     .from('applications')
-    .select('grant_id, name, opportunity_type, status, deadline');
+    .select('grant_id, name, opportunity_type, status, deadline, org_info');
   if (error) throw error;
   return (data ?? []).map((row: ApplicationRow) => ({
     grantId: row.grant_id,
@@ -26,6 +27,7 @@ export async function fetchApplications(): Promise<Application[]> {
     opportunityType: row.opportunity_type as OpportunityType,
     status: row.status as OpportunityStatus,
     deadline: row.deadline,
+    orgInfo: row.org_info ?? {},
   }));
 }
 
@@ -36,6 +38,7 @@ export async function insertApplication(app: Application, tenantId: string): Pro
     opportunity_type: app.opportunityType,
     status: app.status,
     deadline: app.deadline,
+    org_info: app.orgInfo,
     tenant_id: tenantId,
   });
   if (error) throw error;
@@ -45,6 +48,14 @@ export async function persistApplicationStatus(grantId: string, status: Opportun
   const { error } = await supabase
     .from('applications')
     .update({ status, updated_at: new Date().toISOString() })
+    .eq('grant_id', grantId);
+  if (error) throw error;
+}
+
+export async function persistOrgInfo(grantId: string, orgInfo: Record<string, OrgInfoField>): Promise<void> {
+  const { error } = await supabase
+    .from('applications')
+    .update({ org_info: orgInfo, updated_at: new Date().toISOString() })
     .eq('grant_id', grantId);
   if (error) throw error;
 }

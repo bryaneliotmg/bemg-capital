@@ -1,4 +1,5 @@
 import type { EditableTabId } from '../context/BusinessDNAContext';
+import type { DnaField, EvidenceStatus, OrgInfoField } from './sampleData';
 
 export interface ApplicationFieldMapping {
   label: string;
@@ -44,3 +45,28 @@ export const EXTERNAL_ACQUIRE_LINKS: Record<string, { linkLabel: string; url: st
     url: 'https://sam.gov/content/entity-registration',
   },
 };
+
+// Legal Name specifically needs to match your official state/IRS/SAM.gov registration
+// exactly — a CRM display name is a plausible starting point, not a confirmed match, so
+// a snapshot taken from a "Verified" DNA fact still starts this application's copy as
+// Inferred until the applicant confirms (or corrects) it for this specific submission.
+const DOWNGRADE_TO_INFERRED_ON_SNAPSHOT = new Set(['Legal Name']);
+
+// Applications get a ONE-TIME copy of these fields when started (see startApplication
+// callers in GrantMatches.tsx / Dashboard.tsx) — edited independently from then on,
+// since a specific submission may need a field phrased differently than the live DNA
+// record (or the DNA record may change later without this application following along).
+export function buildOrgInfoSnapshot(
+  getField: (tab: EditableTabId, label: string) => DnaField | undefined,
+): Record<string, OrgInfoField> {
+  const snapshot: Record<string, OrgInfoField> = {};
+  for (const mapping of SF424_FIELD_MAP) {
+    const field = getField(mapping.dnaTab, mapping.dnaLabel);
+    let status: EvidenceStatus = field?.status ?? 'required';
+    if (status === 'verified' && DOWNGRADE_TO_INFERRED_ON_SNAPSHOT.has(mapping.dnaLabel)) {
+      status = 'inferred';
+    }
+    snapshot[mapping.dnaLabel] = { value: field?.value ?? 'Not yet provided', status };
+  }
+  return snapshot;
+}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus } from '../data/sampleData';
+import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus, type OrgInfoField } from '../data/sampleData';
 import type { NarrativeSectionDef } from '../data/narrativeSections';
 import { useAuth } from './AuthContext';
 import {
@@ -9,6 +9,7 @@ import {
   persistApplicationStatus,
   persistNarrativeBulk,
   persistNarrativeSection,
+  persistOrgInfo,
 } from '../lib/applicationsStore';
 
 interface StartableOpportunity {
@@ -25,9 +26,10 @@ interface ApplicationsContextValue {
   loading: boolean;
   saveStatus: SaveStatus;
   hasApplication: (grantId: string) => boolean;
-  startApplication: (opportunity: StartableOpportunity) => void;
+  startApplication: (opportunity: StartableOpportunity, orgInfo: Record<string, OrgInfoField>) => void;
   getApplication: (grantId: string) => Application | undefined;
   setApplicationStatus: (grantId: string, status: OpportunityStatus) => void;
+  updateOrgField: (grantId: string, dnaLabel: string, value: string) => void;
   getNarrative: (grantId: string) => Record<string, string>;
   updateNarrative: (grantId: string, sectionId: string, value: string) => void;
   setNarrativeBulk: (grantId: string, sections: Record<string, string>) => void;
@@ -80,7 +82,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const hasApplication = (grantId: string) => applications.some((a) => a.grantId === grantId);
   const getApplication = (grantId: string) => applications.find((a) => a.grantId === grantId);
 
-  const startApplication = (opportunity: StartableOpportunity) => {
+  const startApplication = (opportunity: StartableOpportunity, orgInfo: Record<string, OrgInfoField>) => {
     if (hasApplication(opportunity.id) || !tenantId) return;
     const app: Application = {
       grantId: opportunity.id,
@@ -88,6 +90,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       opportunityType: 'GRANT',
       status: 'draft',
       deadline: opportunity.deadline,
+      orgInfo,
     };
     setApplications((prev) => [app, ...prev]);
     runPersist(() => insertApplication(app, tenantId));
@@ -96,6 +99,19 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const setApplicationStatus = (grantId: string, status: OpportunityStatus) => {
     setApplications((prev) => prev.map((a) => (a.grantId === grantId ? { ...a, status } : a)));
     runPersist(() => persistApplicationStatus(grantId, status));
+  };
+
+  const updateOrgField = (grantId: string, dnaLabel: string, value: string) => {
+    let updatedOrgInfo: Record<string, OrgInfoField> | null = null;
+    setApplications((prev) =>
+      prev.map((a) => {
+        if (a.grantId !== grantId) return a;
+        updatedOrgInfo = { ...a.orgInfo, [dnaLabel]: { value, status: 'verified' } };
+        return { ...a, orgInfo: updatedOrgInfo };
+      }),
+    );
+    if (!tenantId || !updatedOrgInfo) return;
+    runPersist(() => persistOrgInfo(grantId, updatedOrgInfo!));
   };
 
   const getNarrative = (grantId: string) => narrativeByGrant[grantId] ?? {};
@@ -145,6 +161,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
         startApplication,
         getApplication,
         setApplicationStatus,
+        updateOrgField,
         getNarrative,
         updateNarrative,
         setNarrativeBulk,
