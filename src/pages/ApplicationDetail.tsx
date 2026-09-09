@@ -219,6 +219,9 @@ export function ApplicationDetail() {
   const [alignment, setAlignment] = useState<Record<string, AlignmentAssessment> | null>(null);
   const [assessing, setAssessing] = useState(false);
   const [assessError, setAssessError] = useState<string | null>(null);
+  const [strengthening, setStrengthening] = useState(false);
+  const [strengthenLog, setStrengthenLog] = useState<string[]>([]);
+  const [strengthenError, setStrengthenError] = useState<string | null>(null);
 
   const application = grantId ? getApplication(grantId) : undefined;
   const opportunity = opportunities.find((o) => o.id === grantId);
@@ -253,33 +256,112 @@ export function ApplicationDetail() {
       ? Math.max(0, Math.min(100, Math.round(0.7 * contentAvg + 0.3 * orgFraction * 100) - placeholderPenalty))
       : null;
 
+  async function callAssess(narrativeToAssess: Record<string, string>): Promise<Record<string, AlignmentAssessment>> {
+    if (!opportunity) throw new Error('No opportunity loaded');
+    const res = await fetch('/api/assess-alignment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sections: sections.map((s) => ({ id: s.id, label: s.label, guidance: s.guidance })),
+        narrative: narrativeToAssess,
+        opportunity: {
+          title: opportunity.name,
+          funder: opportunity.funder,
+          description: opportunity.description,
+          eligibilityNotes: opportunity.applicantEligibilityDesc,
+        },
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Assessment failed');
+    return body.assessments as Record<string, AlignmentAssessment>;
+  }
+
   async function handleAssessAlignment() {
-    if (!opportunity) return;
     setAssessError(null);
     setAssessing(true);
     try {
-      const res = await fetch('/api/assess-alignment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sections: sections.map((s) => ({ id: s.id, label: s.label, guidance: s.guidance })),
-          narrative,
-          opportunity: {
-            title: opportunity.name,
-            funder: opportunity.funder,
-            description: opportunity.description,
-            eligibilityNotes: opportunity.applicantEligibilityDesc,
-          },
-        }),
-      });
-      const responseBody = await res.json();
-      if (!res.ok) throw new Error(responseBody.error || 'Assessment failed');
-      setAlignment(responseBody.assessments);
+      const result = await callAssess(narrative);
+      setAlignment(result);
       setAssessedSnapshot(narrativeSnapshot);
     } catch (err) {
       setAssessError(err instanceof Error ? err.message : 'Assessment failed');
     } finally {
       setAssessing(false);
+    }
+  }
+
+  async function handleStrengthenDraft() {
+    if (!opportunity || !grantId) return;
+    setStrengthenError(null);
+    setStrengthening(true);
+    setStrengthenLog([]);
+    let workingNarrative: Record<string, string> = { ...narrative };
+    const log: string[] = [];
+    try {
+      let currentAlignment: Record<string, AlignmentAssessment> | null =
+        alignment && !isAlignmentStale ? alignment : null;
+      if (!currentAlignment) {
+        currentAlignment = await callAssess(workingNarrative);
+        setAlignment(currentAlignment);
+        setAssessedSnapshot(JSON.stringify(workingNarrative));
+      }
+
+      const MAX_ROUNDS = 3;
+      for (let round = 1; round <= MAX_ROUNDS; round++) {
+        const weak = sections.filter((s) => currentAlignment![s.id] && currentAlignment![s.id].rating !== 'Strong');
+        if (weak.length === 0) {
+          log.push(`Round ${round}: every section is already rated Strong — nothing left to strengthen.`);
+          break;
+        }
+
+        const hasPlaceholder = (text: string) => /\[[^\]]+\]/.test(text);
+        const fixable = weak.filter((s) => !hasPlaceholder(workingNarrative[s.id] ?? ''));
+        const factBlocked = weak.filter((s) => hasPlaceholder(workingNarrative[s.id] ?? ''));
+
+        if (fixable.length === 0) {
+          log.push(
+            `Round ${round}: the remaining weak section${factBlocked.length > 1 ? 's are' : ' is'} ${factBlocked
+              .map((s) => s.label)
+              .join(', ')} — blocked by missing facts, not writing quality. Add those to Business DNA to improve further.`,
+          );
+          break;
+        }
+
+        const critiques = Object.fromEntries(fixable.map((s) => [s.id, currentAlignment![s.id].reason]));
+        const beforeScores = Object.fromEntries(fixable.map((s) => [s.id, currentAlignment![s.id].score]));
+        const result = await callGenerate(fixable, critiques);
+        if (!result) break;
+        workingNarrative = { ...workingNarrative, ...result };
+        setNarrativeBulk(grantId, result);
+
+        const newAlignment = await callAssess(workingNarrative);
+        currentAlignment = { ...currentAlignment, ...newAlignment };
+        setAlignment(currentAlignment);
+        setAssessedSnapshot(JSON.stringify(workingNarrative));
+
+        const changes = fixable
+          .map((s) => `${s.label} ${beforeScores[s.id]}→${newAlignment[s.id]?.score ?? beforeScores[s.id]}`)
+          .join(', ');
+        log.push(`Round ${round}: ${changes}.`);
+
+        if (factBlocked.length > 0) {
+          log.push(
+            `Still blocked by missing facts: ${factBlocked.map((s) => s.label).join(', ')} — add those to Business DNA to raise the score further.`,
+          );
+        }
+
+        const improved = fixable.some((s) => (newAlignment[s.id]?.score ?? 0) > beforeScores[s.id]);
+        if (!improved) {
+          log.push(`Round ${round}: no measurable improvement — stopping early rather than spinning further.`);
+          break;
+        }
+      }
+    } catch (err) {
+      setStrengthenError(err instanceof Error ? err.message : 'Strengthen failed');
+    } finally {
+      setStrengthenLog(log);
+      setStrengthening(false);
     }
   }
 
@@ -315,7 +397,7 @@ export function ApplicationDetail() {
       .map((f) => ({ label: f.label, value: f.value, status: f.status }));
   }
 
-  async function callGenerate(sectionsToGenerate: typeof sections) {
+  async function callGenerate(sectionsToGenerate: typeof sections, critiques?: Record<string, string>) {
     if (!opportunity) return null;
     const res = await fetch('/api/generate-narrative', {
       method: 'POST',
@@ -332,6 +414,7 @@ export function ApplicationDetail() {
         businessFacts: buildBusinessFacts(),
         referenceAbstracts: reporterExamples.map((e) => ({ title: e.title, abstract: e.abstract })),
         targetKeywords: keywordTargets,
+        critiques,
       }),
     });
     const body = await res.json();
@@ -834,15 +917,47 @@ export function ApplicationDetail() {
                           </div>
                         )}
                       </div>
-                      <button
-                        className="glass-btn-outline flex items-center gap-1.5 ml-auto self-start"
-                        onClick={handleAssessAlignment}
-                        disabled={assessing}
-                      >
-                        <RefreshCw className={cn('w-3.5 h-3.5', assessing && 'animate-spin')} />
-                        {assessing ? 'Re-assessing…' : 'Re-assess'}
-                      </button>
+                      <div className="flex items-center gap-2 ml-auto self-start">
+                        <button
+                          className="glass-btn flex items-center gap-1.5"
+                          onClick={handleStrengthenDraft}
+                          disabled={assessing || strengthening}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          {strengthening ? 'Strengthening…' : 'Strengthen Draft'}
+                        </button>
+                        <button
+                          className="glass-btn-outline flex items-center gap-1.5"
+                          onClick={handleAssessAlignment}
+                          disabled={assessing || strengthening}
+                        >
+                          <RefreshCw className={cn('w-3.5 h-3.5', assessing && 'animate-spin')} />
+                          {assessing ? 'Re-assessing…' : 'Re-assess'}
+                        </button>
+                      </div>
                     </div>
+
+                    {strengthenError && (
+                      <div className="text-[12px] font-semibold text-required mb-4 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        {strengthenError}
+                      </div>
+                    )}
+
+                    {strengthenLog.length > 0 && (
+                      <div className="mb-5 p-4 rounded-xl bg-surface-2">
+                        <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2">
+                          Strengthen Draft — what changed
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          {strengthenLog.map((line, i) => (
+                            <div key={i} className="text-[12px] text-ink-2">
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex flex-col gap-3">
                       {sections.map((s) => {

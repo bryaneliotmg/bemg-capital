@@ -25,6 +25,8 @@ interface GenerateBody {
   businessFacts: BusinessFact[];
   referenceAbstracts?: ReferenceAbstract[];
   targetKeywords?: string[];
+  /** Per-section critique from a prior alignment assessment, for a targeted rewrite. */
+  critiques?: Record<string, string>;
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1500): Promise<T> {
@@ -76,7 +78,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .join('\n\n');
 
   const sectionsBlock = body.sections
-    .map((s) => `### ${s.id} — "${s.label}"\nWhat reviewers score: ${s.guidance}\nAnswer this: ${s.prompt}`)
+    .map((s) => {
+      const critique = body.critiques?.[s.id];
+      const critiqueLine = critique
+        ? `\nA reviewer's critique of the PREVIOUS draft of this section: "${critique}" — rewrite to directly address this critique using ONLY the business facts already given above. Do not invent a new fact or a more specific number/name to compensate for a gap the critique identifies; if the critique points at something genuinely missing, keep the bracketed placeholder rather than inventing a fix.`
+        : '';
+      return `### ${s.id} — "${s.label}"\nWhat reviewers score: ${s.guidance}\nAnswer this: ${s.prompt}${critiqueLine}`;
+    })
     .join('\n\n');
 
   const prompt = `You are drafting sections of a real federal/foundation grant application narrative for a small business, to be reviewed and edited by the business owner before submission — this is a first draft, not a final document.
