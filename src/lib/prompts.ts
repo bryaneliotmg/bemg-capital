@@ -64,12 +64,13 @@ export function buildIdentityPrompt(identityFields: FactLike[], supportingFacts:
   const storyFields = identityFields.filter((f) => f.multiline);
   const missing = registrationFields.filter((f) => f.status === 'required').map((f) => f.label);
   const unconfirmed = registrationFields.filter((f) => f.status === 'inferred').map((f) => f.label);
-  const missingStory = storyFields.filter((f) => f.status === 'required').map((f) => f.label);
 
   const supportingLines = supportingFacts
     .filter((f) => f.value && f.value !== 'Not yet provided')
     .map((f) => `- ${f.label}: ${f.value}`)
     .join('\n');
+
+  const businessName = identityFields.find((f) => f.label === 'Legal Name' && f.value !== 'Not yet provided')?.value ?? '[Business Name]';
 
   const tasks: string[] = [];
   if (missing.length) {
@@ -82,9 +83,14 @@ export function buildIdentityPrompt(identityFields: FactLike[], supportingFacts:
       `These fields are unconfirmed and may not exactly match my official registration: ${unconfirmed.join(', ')}. Tell me specifically what document I should check them against (e.g. Articles of Organization, my IRS EIN confirmation letter, my SAM.gov registration) so they match exactly.`,
     );
   }
-  if (missingStory.length) {
+  for (const story of storyFields) {
+    const hasDraft = story.status !== 'required';
     tasks.push(
-      `${missingStory.join(', ')} isn't a registration fact to look up — draft it directly using the "supporting business context" above (not the identity facts): what the business does, who it serves, and why it matters. Ground it strictly in those facts; if there isn't enough there to write something specific and true, use a bracketed placeholder rather than inventing detail.`,
+      `${story.label} isn't a registration fact to look up — it needs to read like a real grant-ready company profile, not marketing copy. ${
+        hasDraft
+          ? `Revise and restructure my current draft below into the exact format that follows, keeping anything already true and filling gaps from the supporting business context above.\n\nMY CURRENT DRAFT:\n${story.value}`
+          : 'Using the supporting business context above, write it in the exact format that follows.'
+      }\n\nCOMPANY PROFILE — ${businessName} (Grant-Ready)\n\nMISSION & THE PROBLEM WE ADDRESS\n2-3 sentences: the underlying gap or need this work responds to, not just what's sold — this is the single most heavily weighted thing a grant reviewer reads.\n\nOUR APPROACH\n2-3 sentences: the actual mechanism — what specifically happens that closes the gap above, specific enough to picture, not a category label.\n\nWHO WE SERVE & THE EVIDENCE SO FAR\n2-3 sentences: the specific population/market, and any real numbers or outcomes from the facts given that show this isn't theoretical.\n\nCAPABILITIES & TRACK RECORD\nBulleted list: each real capability or delivered product, one line on what it does and what it demonstrates about capacity to execute.\n\nWHAT MAKES THIS WORTH FUNDING\n2-3 sentences: the genuine reason this approach deserves investment over the status quo or alternatives — tied to something structural, not a marketing claim.\n\nQUESTIONS A GRANT REVIEWER TYPICALLY ASKS\n5 bulleted Q&As anticipating real due-diligence concerns (sustainability after funding ends, how success will be measured, why this organization specifically, financial/operational readiness, what happens if it doesn't work as planned) — answered honestly from the facts given.\n\nFUNDING FIT & READINESS\n2-3 sentences: what kind of funding or partnership fits this business at its current stage, and what's needed before a specific application could move forward.\n\nGround every section strictly in the facts given above; use a bracketed placeholder for anything not established rather than inventing detail.`,
     );
   }
   tasks.push('Flag anything else above that looks like it might not hold up to that level of scrutiny.');
