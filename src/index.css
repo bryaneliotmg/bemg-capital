@@ -5,21 +5,21 @@
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "IBM Plex Serif", Georgia, serif;
 
-  --color-paper: oklch(96% 0.016 75);
-  --color-surface: oklch(99% 0.006 75);
-  --color-surface-2: oklch(93% 0.02 75);
+  --color-paper: oklch(95% 0.028 78);
+  --color-surface: oklch(99% 0.01 78);
+  --color-surface-2: oklch(90% 0.035 78);
   --color-ink: oklch(19% 0.02 60);
   --color-ink-2: oklch(40% 0.02 60);
   --color-ink-3: oklch(58% 0.015 60);
-  --color-line: oklch(88% 0.015 70);
-  --color-line-2: oklch(82% 0.018 70);
+  --color-line: oklch(87% 0.025 75);
+  --color-line-2: oklch(80% 0.03 75);
 
-  --color-sidebar: oklch(20% 0.025 55);
-  --color-sidebar-hover: oklch(27% 0.03 55);
-  --color-sidebar-text: oklch(78% 0.02 70);
-  --color-sidebar-text-active: oklch(98% 0.01 75);
+  --color-sidebar: oklch(19% 0.055 255);
+  --color-sidebar-hover: oklch(25% 0.055 255);
+  --color-sidebar-text: oklch(74% 0.02 255);
+  --color-sidebar-text-active: oklch(97% 0.006 255);
 
-  --color-accent: #059669;
+  --color-accent: oklch(42% 0.15 255);
 
   --color-verified: oklch(52% 0.13 155);
   --color-inferred: oklch(62% 0.12 75);
