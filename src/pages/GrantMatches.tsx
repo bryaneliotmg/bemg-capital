@@ -98,7 +98,11 @@ export function GrantMatches() {
     setImporting(true);
     setImportMessage(null);
     try {
-      const parsed = JSON.parse(importText);
+      // AI chat tools (including Claude's Chrome extension) commonly wrap JSON output
+      // in a ```json ... ``` markdown fence even when told to return "only" JSON —
+      // strip it before parsing rather than asking the user to hand-edit the paste.
+      const clean = importText.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '').trim();
+      const parsed = JSON.parse(clean);
       const res = await fetch('/api/import-grants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
