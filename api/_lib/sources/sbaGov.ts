@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
+import { classifyUnclassifiedOpportunities } from '../domainTaxonomy.js';
 
 const GRANTS_PAGE_URL = 'https://www.sba.gov/funding-programs/grants';
 const DESKTOP_UA =
@@ -148,11 +149,13 @@ export async function syncSbaGov(): Promise<SbaSyncResult> {
 
   let synced = 0;
   const errors: string[] = [];
+  const syncedIds: string[] = [];
 
   for (const program of programs) {
+    const id = `sba_gov:${slugify(program.title)}`;
     try {
       const { error } = await supabase.from('funding_opportunities').upsert({
-        id: `sba_gov:${slugify(program.title)}`,
+        id,
         source: 'sba_gov',
         opportunity_number: null,
         title: program.title,
@@ -178,10 +181,13 @@ export async function syncSbaGov(): Promise<SbaSyncResult> {
       });
       if (error) throw error;
       synced++;
+      syncedIds.push(id);
     } catch (err) {
       errors.push(`${program.title}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  await classifyUnclassifiedOpportunities(supabase, syncedIds);
 
   return { found: programs.length, synced, errorCount: errors.length, errors: errors.slice(0, 10) };
 }

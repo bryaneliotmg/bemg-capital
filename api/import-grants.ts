@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { classifyUnclassifiedOpportunities } from './_lib/domainTaxonomy.js';
 
 interface ExtractedGrant {
   title: string;
@@ -63,15 +64,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabase = createClient(supabaseUrl, serviceKey);
   let imported = 0;
   const errors: string[] = [];
+  const importedIds: string[] = [];
 
   for (const grant of body.grants) {
     if (!grant.title || !grant.description) {
       errors.push(`Skipped a grant missing title/description: ${JSON.stringify(grant).slice(0, 100)}`);
       continue;
     }
+    const id = `${body.source}:${slugify(grant.title)}`;
     try {
       const { error } = await supabase.from('funding_opportunities').upsert({
-        id: `${body.source}:${slugify(grant.title)}`,
+        id,
         source: body.source,
         opportunity_number: null,
         title: grant.title,
@@ -97,10 +100,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       if (error) throw error;
       imported++;
+      importedIds.push(id);
     } catch (err) {
       errors.push(`${grant.title}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  await classifyUnclassifiedOpportunities(supabase, importedIds);
 
   res.status(200).json({ ok: true, imported, errorCount: errors.length, errors: errors.slice(0, 10) });
 }

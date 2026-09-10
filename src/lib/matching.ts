@@ -28,6 +28,11 @@ export interface RawFundingOpportunity {
   agency_contact_name: string | null;
   agency_contact_email: string | null;
   agency_contact_phone: string | null;
+  /** One-time AI-classified subject domain (see api/_lib/domainTaxonomy.ts), computed
+   * once when the grant is synced/imported — never computed live here. Null until
+   * classification has run (e.g. right after a fresh sync, before the background
+   * classification pass completes). */
+  primary_domain: string | null;
 }
 
 export interface FundingCategory {
@@ -63,7 +68,18 @@ export interface BusinessProfile {
   keywords: string[];
   /** Stated capital requirement range, if known (from Growth DNA). */
   capitalRequirementMin?: number;
+  /** The tenant's own one-time AI-classified business domain (see
+   * tenant_domain_classification / api/_lib/domainTaxonomy.ts) — a coarse consistency
+   * check against a grant's classified domain, not a live judgment call. Undefined
+   * until the tenant has been classified (e.g. right after their first Business DNA
+   * save, before the background classification call completes). */
+  domain?: string;
 }
+
+// Duplicated from api/_lib/domainTaxonomy.ts's WILDCARD_DOMAIN rather than imported —
+// that module uses @google/genai and server-only env vars and has no business being
+// pulled into this client-side bundle just for one string constant. Must stay in sync.
+const WILDCARD_DOMAIN = 'Other / General Business Support';
 
 export interface MatchResult {
   eligible: boolean;
@@ -120,6 +136,7 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   }
 
   const reasons: string[] = [];
+  const caveats: string[] = [];
   let score = 20; // base score for clearing the hard eligibility + open-status filter
 
   if (!isGrantsGov) {
@@ -185,7 +202,26 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
     }
   }
 
-  const caveats: string[] = [];
+  // The structural check keyword overlap alone can't do: an NSF astrophysics grant and
+  // a children's arts/culinary program can share incidental vocabulary (see the
+  // description-window and buzzword-stopword fixes above) without being remotely the
+  // same field. Domain classification is computed once per grant/tenant (never live —
+  // see api/_lib/domainTaxonomy.ts) and stored, so this comparison is still a lookup
+  // against a fact on file, not a live judgment call. Skipped entirely if either side
+  // hasn't been classified yet, or if either is the deliberate "General Business
+  // Support" wildcard (too broad to call a mismatch).
+  if (profile.domain && opp.primary_domain) {
+    if (profile.domain === opp.primary_domain) {
+      reasons.push(`Matches your business's classified focus: ${profile.domain}`);
+      score += 20;
+    } else if (profile.domain !== WILDCARD_DOMAIN && opp.primary_domain !== WILDCARD_DOMAIN) {
+      caveats.push(
+        `This grant's primary focus (${opp.primary_domain}) doesn't match your business's classified focus (${profile.domain}) — any keyword overlap above may be coincidental, not genuine alignment.`,
+      );
+      score -= 30;
+    }
+  }
+
   if (isSttr(opp.title)) {
     caveats.push(
       'STTR requires a formal partnership with a U.S. nonprofit research institution (a named co-PI there, a subcontract) — not confirmed on file. Without one, this mechanism likely isn\'t viable regardless of how well the keywords line up.',

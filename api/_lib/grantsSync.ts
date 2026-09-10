@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { classifyUnclassifiedOpportunities } from './domainTaxonomy.js';
 
 const SEARCH_URL = 'https://api.grants.gov/v1/api/search2';
 const DETAIL_URL = 'https://api.grants.gov/v1/api/fetchOpportunity';
@@ -141,6 +142,11 @@ export async function syncGrants(opts: { keyword?: string; rows?: number }): Pro
       errors.push(`${hit.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  // Classify only whatever's newly synced (or was somehow never classified) — a grant
+  // already classified from a prior sync keeps its stored domain untouched, since this
+  // is a one-time-per-grant AI call, not something re-run on every daily sync.
+  await classifyUnclassifiedOpportunities(supabase, syncedIds);
 
   return {
     totalHits: searchJson?.data?.hitCount ?? 0,

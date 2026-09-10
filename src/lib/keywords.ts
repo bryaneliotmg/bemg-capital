@@ -82,11 +82,17 @@ const PROFILE_LABELS = new Set([
 // bEMG itself) now that Business DNA is per-tenant — the exact same matching code in
 // matching.ts genuinely serves any tenant's business now, based on what's actually
 // true about them, rather than a single fixed keyword list.
-export function deriveKeywordsFromDnaFields(fieldsByTab: Record<EditableTabId, DnaField[]>): string[] {
-  const text = Object.values(fieldsByTab)
+// The same raw profile text deriveKeywordsFromDnaFields() extracts keywords from —
+// exposed separately so it can also be sent for one-time AI domain classification
+// (see api/_lib/domainTaxonomy.ts) without duplicating the field-selection logic.
+export function buildProfileText(fieldsByTab: Record<EditableTabId, DnaField[]>): string {
+  return Object.values(fieldsByTab)
     .flat()
     .filter((f) => PROFILE_LABELS.has(f.label) && f.value !== 'Not yet provided' && f.value !== 'Not available')
     .map((f) => f.value)
     .join(' ');
-  return extractKeywords(text, 20);
+}
+
+export function deriveKeywordsFromDnaFields(fieldsByTab: Record<EditableTabId, DnaField[]>): string[] {
+  return extractKeywords(buildProfileText(fieldsByTab), 20);
 }

@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { getMatchedOpportunities, searchGrants, type MatchedOpportunity } from '../lib/opportunities';
-import { deriveKeywordsFromDnaFields } from '../lib/keywords';
+import { deriveKeywordsFromDnaFields, buildProfileText } from '../lib/keywords';
 import { useBusinessDNA } from './BusinessDNAContext';
+import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
 function parseDollarAmount(raw: string): number | null {
   const cleaned = raw.replace(/[, ]/g, '');
@@ -40,21 +42,24 @@ const OpportunitiesContext = createContext<OpportunitiesContextValue>({
 
 export function OpportunitiesProvider({ children }: { children: ReactNode }) {
   const { fieldsByTab, getField, loading: dnaLoading } = useBusinessDNA();
+  const { activeTenantId } = useAuth();
   const [opportunities, setOpportunities] = useState<MatchedOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [tenantDomain, setTenantDomain] = useState<string | undefined>(undefined);
 
   const capitalField = getField('growth', 'Capital Requirement');
   const capitalRequirementMin =
     capitalField && capitalField.status !== 'required' ? parseDollarAmount(capitalField.value) ?? undefined : undefined;
   const keywords = deriveKeywordsFromDnaFields(fieldsByTab);
+  const profileText = buildProfileText(fieldsByTab);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getMatchedOpportunities({ keywords, capitalRequirementMin });
+      const data = await getMatchedOpportunities({ keywords, capitalRequirementMin, domain: tenantDomain });
       setOpportunities(data);
       setError(null);
     } catch (err) {
@@ -63,12 +68,50 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywords.join('|'), capitalRequirementMin]);
+  }, [keywords.join('|'), capitalRequirementMin, tenantDomain]);
 
   useEffect(() => {
     if (dnaLoading) return;
     load();
   }, [load, dnaLoading]);
+
+  // One-time-per-profile-change AI domain classification (see api/_lib/domainTaxonomy.ts)
+  // — never a live call at match time. Reads whatever's already on file immediately
+  // (no AI call, just a lookup), and only hits the classification endpoint when the
+  // stored fingerprint doesn't match the tenant's current profile text (i.e. their
+  // Business DNA has meaningfully changed since it was last classified, or never was).
+  useEffect(() => {
+    if (dnaLoading || !activeTenantId || !profileText.trim()) {
+      setTenantDomain(undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('tenant_domain_classification')
+        .select('primary_domain, profile_fingerprint')
+        .eq('tenant_id', activeTenantId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data) setTenantDomain(data.primary_domain);
+      if (data?.profile_fingerprint === profileText) return; // already fresh
+      try {
+        const res = await fetch('/api/classify-tenant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId: activeTenantId, profileText }),
+        });
+        const body = await res.json();
+        if (!cancelled && body.primaryDomain) setTenantDomain(body.primaryDomain);
+      } catch {
+        // Best-effort — matching just proceeds without the domain signal if this
+        // fails, same as any grant that hasn't been classified yet either.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantId, profileText, dnaLoading]);
 
   const search = useCallback(
     async (keyword: string) => {

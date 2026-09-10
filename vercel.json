@@ -8,7 +8,9 @@
     "api/search-grants.ts": { "maxDuration": 60 },
     "api/generate-narrative.ts": { "maxDuration": 60 },
     "api/reporter-examples.ts": { "maxDuration": 30 },
-    "api/assess-alignment.ts": { "maxDuration": 60 }
+    "api/assess-alignment.ts": { "maxDuration": 60 },
+    "api/import-grants.ts": { "maxDuration": 60 },
+    "api/classify-tenant.ts": { "maxDuration": 30 }
   },
   "crons": [
     { "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" },
