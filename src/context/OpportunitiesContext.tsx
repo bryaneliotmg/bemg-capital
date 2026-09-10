@@ -23,6 +23,9 @@ interface OpportunitiesContextValue {
   searchError: string | null;
   /** Live-search Grants.gov by keyword, cache whatever it finds, then refresh the list. */
   search: (keyword: string) => Promise<void>;
+  /** Re-fetch and re-score without a live Grants.gov search — used after a manual
+   * grant import so the newly-added rows show up immediately. */
+  refresh: () => Promise<void>;
 }
 
 const OpportunitiesContext = createContext<OpportunitiesContextValue>({
@@ -32,6 +35,7 @@ const OpportunitiesContext = createContext<OpportunitiesContextValue>({
   searching: false,
   searchError: null,
   search: async () => {},
+  refresh: async () => {},
 });
 
 export function OpportunitiesProvider({ children }: { children: ReactNode }) {
@@ -83,7 +87,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <OpportunitiesContext.Provider value={{ opportunities, loading, error, searching, searchError, search }}>
+    <OpportunitiesContext.Provider value={{ opportunities, loading, error, searching, searchError, search, refresh: load }}>
       {children}
     </OpportunitiesContext.Provider>
   );

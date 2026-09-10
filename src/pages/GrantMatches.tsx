@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X } from 'lucide-react';
+import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X, Copy, Upload } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
+import { useAuth } from '../context/AuthContext';
 import { ELIGIBILITY_LABELS } from '../lib/matching';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, buildOrgInfoSnapshot } from '../data/applicationFields';
+import { buildGrantExtractionPrompt } from '../lib/prompts';
 
 const BUSINESS_CODES = new Set(['22', '23', '25', '99']);
 
@@ -22,11 +24,17 @@ function formatExactDate(iso: string | null): string {
 export function GrantMatches() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
-  const { opportunities, loading, error, search, searching, searchError } = useOpportunities();
+  const { opportunities, loading, error, search, searching, searchError, refresh } = useOpportunities();
   const { getField } = useBusinessDNA();
+  const { isAdmin } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   // "Sections" built from Grants.gov's own funding-activity-category labels present
   // in whatever's actually synced — not a hardcoded/guessed taxonomy. Demographic or
@@ -80,6 +88,38 @@ export function GrantMatches() {
     search(term);
   }
 
+  async function handleCopyExtractionPrompt() {
+    await navigator.clipboard.writeText(buildGrantExtractionPrompt());
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2500);
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const parsed = JSON.parse(importText);
+      const res = await fetch('/api/import-grants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Import failed');
+      setImportMessage(
+        `Imported ${body.imported} grant${body.imported === 1 ? '' : 's'}` +
+          (body.errorCount > 0 ? ` (${body.errorCount} skipped — see console)` : '.'),
+      );
+      if (body.errorCount > 0) console.warn('Import errors:', body.errors);
+      setImportText('');
+      await refresh();
+    } catch (err) {
+      setImportMessage(err instanceof Error ? `Couldn't import: ${err.message}` : 'Import failed — check the pasted JSON.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="panel-enter">
       <div className="flex items-center gap-2.5 mb-4">
@@ -97,7 +137,41 @@ export function GrantMatches() {
           {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
           {searching ? 'Searching…' : 'Search'}
         </button>
+        {isAdmin && (
+          <button className="glass-btn-outline" onClick={() => setImportOpen((v) => !v)}>
+            <Upload className="w-3.5 h-3.5" />
+            Import grants
+          </button>
+        )}
       </div>
+      {isAdmin && importOpen && (
+        <div className="glass-card p-5 mb-4">
+          <div className="text-[13px] font-bold mb-1.5">Manually import grants from a blocked site</div>
+          <div className="text-[11.5px] text-ink-2 leading-relaxed mb-3.5">
+            For sites that block automated access (Hello Alice, MBDA, etc.): browse the site yourself in a
+            session where Claude's Chrome extension is active, copy this prompt to it, then paste the JSON
+            it returns below and import.
+          </div>
+          <button className="glass-btn-outline mb-3.5" onClick={handleCopyExtractionPrompt}>
+            <Copy className="w-3.5 h-3.5" />
+            {promptCopied ? 'Copied — paste into your AI' : 'Copy extraction prompt'}
+          </button>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder='Paste the JSON output here — { "source": "...", "sourceLabel": "...", "grants": [...] }'
+            rows={6}
+            className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-2 text-[12.5px] font-mono outline-none focus:border-accent resize-y mb-3"
+          />
+          <div className="flex items-center gap-3">
+            <button className="glass-btn" onClick={handleImport} disabled={importing || !importText.trim()}>
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {importing ? 'Importing…' : 'Import'}
+            </button>
+            {importMessage && <div className="text-[12px] font-semibold text-ink-2">{importMessage}</div>}
+          </div>
+        </div>
+      )}
       {searchError && <div className="text-[12px] text-required font-semibold mb-3">{searchError}</div>}
       <div className="text-[11px] text-ink-3 mb-4 leading-relaxed max-w-2xl">
         Typing filters the list below to opportunities whose title, description, or eligibility text

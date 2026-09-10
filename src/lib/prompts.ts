@@ -143,3 +143,33 @@ Please draft each of the following narrative sections — 2-4 focused paragraphs
 
 ${sectionsBlock}`;
 }
+
+// Meant to be run in a live, logged-in browser session (e.g. via Claude's Chrome
+// extension) on a grant-listing site that blocks automated/headless access — the
+// output is designed to be pasted directly into this app's manual grant importer
+// (see api/import-grants.ts), so the shape here and the shape that endpoint expects
+// must stay in sync. Same anti-hallucination rule as every other prompt in this file:
+// only extract what's actually visible, never invent a number or date.
+export function buildGrantExtractionPrompt(): string {
+  return `I'm looking at a webpage that lists grants or funding programs for small businesses. Extract ONLY the individual grant/funding listings you can actually see on this page — skip anything that isn't a grant (e.g. blog posts, generic offers/discounts, webinars/events, navigation links) unless it's clearly a funding program.
+
+For each grant, extract:
+- "title": the grant's name, exactly as written
+- "description": its description, verbatim (or a faithful summary if very long)
+- "amount": the dollar amount if one is stated (e.g. "$50,000"), otherwise null — never invent a number
+- "status": "open" if it says something like "accepting applications" / "ongoing" / a future deadline, "closed" if explicitly closed, otherwise "unknown"
+- "applyUrl": the actual link to apply or learn more, if one exists on the page, otherwise null
+- "eligibilityNotes": who's eligible (e.g. "women-owned businesses", "US-based small businesses"), if stated, otherwise null
+
+Return ONLY valid JSON in exactly this shape, nothing else before or after it:
+
+{
+  "source": "a short lowercase-with-underscores slug for this website, e.g. hello_alice",
+  "sourceLabel": "the site's actual name, e.g. Hello Alice",
+  "grants": [
+    { "title": "...", "description": "...", "amount": null, "status": "open", "applyUrl": null, "eligibilityNotes": null }
+  ]
+}
+
+If you find no real grant listings on this page, return "grants": [].`;
+}
