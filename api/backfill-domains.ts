@@ -15,12 +15,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Classification is now strictly sequential with a ~13s pause between calls (see
+  // Classification is strictly sequential with a ~13s pause between calls (see
   // classifyUnclassifiedOpportunities's own comment — the Gemini key here is
-  // free-tier, 5 requests/minute), so a 60s function only fits ~4 per invocation
-  // regardless of what's requested. Default to 4 rather than a bigger number that
-  // just gets cut off by the timeout mid-batch.
-  const limit = req.query.limit ? Number(req.query.limit) : 4;
+  // free-tier, 5 requests/minute). A limit of 4 actually timed out in practice
+  // (3 gaps × 13s = 39s, plus 4 real Gemini calls whose latency varies, plus the
+  // two Supabase queries either side, exceeded the 60s function ceiling) — 3 leaves
+  // real margin (2 gaps × 13s = 26s) instead of cutting it exactly close.
+  const limit = req.query.limit ? Number(req.query.limit) : 3;
   const supabase = createClient(supabaseUrl, serviceKey);
 
   const { data: rows, error } = await supabase
