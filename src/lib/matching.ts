@@ -69,8 +69,10 @@ export interface MatchResult {
   caveats: string[];
 }
 
-// Grants.gov applicant-type facet codes plausible for a for-profit small business.
-const BUSINESS_ELIGIBLE_CODES = new Set(['22', '23', '25', '99']);
+// Grants.gov applicant-type facet codes plausible for a for-profit small business —
+// plus the two nonprofit codes (12, 13), since bEMG Capital serves nonprofit tenants
+// too (e.g. arts/wellness organizations), not just for-profit small businesses.
+const BUSINESS_ELIGIBLE_CODES = new Set(['12', '13', '22', '23', '25', '99']);
 const OPEN_STATUSES = new Set(['posted', 'forecasted']);
 
 // STTR (not SBIR) statutorily requires the small business to have a formal cooperative
@@ -97,7 +99,13 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const reasons: string[] = [];
   let score = 40; // base score for clearing the hard eligibility + open-status filter
 
-  if (codes.includes('23')) {
+  if (codes.includes('12')) {
+    reasons.push('Eligible applicant type: Nonprofits with 501(c)(3) status');
+    score += 15;
+  } else if (codes.includes('13')) {
+    reasons.push('Eligible applicant type: Nonprofits without 501(c)(3) status');
+    score += 12;
+  } else if (codes.includes('23')) {
     reasons.push('Eligible applicant type: Small businesses');
     score += 15;
   } else if (codes.includes('22')) {

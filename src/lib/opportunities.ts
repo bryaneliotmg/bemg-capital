@@ -1,6 +1,5 @@
 import { supabase } from './supabase';
-import { matchOpportunity, type RawFundingOpportunity, type FundingCategory } from './matching';
-import { BUSINESS_PROFILE_KEYWORDS } from '../data/sampleData';
+import { matchOpportunity, type RawFundingOpportunity, type FundingCategory, type BusinessProfile } from './matching';
 
 export interface MatchedOpportunity {
   id: string;
@@ -68,7 +67,7 @@ function stripHtml(html: string): string {
 const SELECT_COLUMNS =
   'id, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories, agency_contact_name, agency_contact_email, agency_contact_phone';
 
-export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
+export async function getMatchedOpportunities(profile: BusinessProfile): Promise<MatchedOpportunity[]> {
   const { data, error } = await supabase.from('funding_opportunities').select(SELECT_COLUMNS);
 
   if (error) throw error;
@@ -77,7 +76,7 @@ export async function getMatchedOpportunities(): Promise<MatchedOpportunity[]> {
 
   return rows
     .map((opp) => {
-      const result = matchOpportunity(opp, { keywords: BUSINESS_PROFILE_KEYWORDS });
+      const result = matchOpportunity(opp, profile);
       if (!result.eligible) return null;
       const matched: MatchedOpportunity = {
         id: opp.id,

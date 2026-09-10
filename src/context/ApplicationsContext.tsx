@@ -41,7 +41,7 @@ const ApplicationsContext = createContext<ApplicationsContextValue | null>(null)
 const NARRATIVE_SAVE_DEBOUNCE_MS = 1000;
 
 export function ApplicationsProvider({ children }: { children: ReactNode }) {
-  const { tenantId } = useAuth();
+  const { activeTenantId: tenantId } = useAuth();
   const [applications, setApplications] = useState<Application[]>(DEFAULT_APPLICATIONS);
   const [narrativeByGrant, setNarrativeByGrant] = useState<NarrativeByGrant>({});
   const [loading, setLoading] = useState(true);

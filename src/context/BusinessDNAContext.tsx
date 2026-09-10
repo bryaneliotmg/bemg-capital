@@ -1,18 +1,22 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
-import {
-  IDENTITY_FIELDS,
-  FINANCIAL_FIELDS,
-  OPERATING_FIELDS,
-  GROWTH_FIELDS,
-  FUNDING_FIELDS,
-  type DnaField,
-  type DnaTabDef,
-} from '../data/sampleData';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { DnaField } from '../data/sampleData';
+import type { EditableTabId } from '../data/sampleData';
+import { fetchBusinessDnaFields, persistDnaField } from '../lib/businessDnaStore';
+import { useAuth } from './AuthContext';
 
-export type EditableTabId = Exclude<DnaTabDef['id'], 'readiness'>;
+export type { EditableTabId };
+
+const EMPTY_FIELDS: Record<EditableTabId, DnaField[]> = {
+  identity: [],
+  financial: [],
+  operating: [],
+  growth: [],
+  funding: [],
+};
 
 interface BusinessDNAContextValue {
   fieldsByTab: Record<EditableTabId, DnaField[]>;
+  loading: boolean;
   editingTab: EditableTabId | null;
   draft: DnaField[] | null;
   startEdit: (tab: EditableTabId) => void;
@@ -28,15 +32,34 @@ interface BusinessDNAContextValue {
 const BusinessDNAContext = createContext<BusinessDNAContextValue | null>(null);
 
 export function BusinessDNAProvider({ children }: { children: ReactNode }) {
-  const [fieldsByTab, setFieldsByTab] = useState<Record<EditableTabId, DnaField[]>>({
-    identity: IDENTITY_FIELDS,
-    financial: FINANCIAL_FIELDS,
-    operating: OPERATING_FIELDS,
-    growth: GROWTH_FIELDS,
-    funding: FUNDING_FIELDS,
-  });
+  const { activeTenantId } = useAuth();
+  const [fieldsByTab, setFieldsByTab] = useState<Record<EditableTabId, DnaField[]>>(EMPTY_FIELDS);
+  const [loading, setLoading] = useState(true);
   const [editingTab, setEditingTab] = useState<EditableTabId | null>(null);
   const [draft, setDraft] = useState<DnaField[] | null>(null);
+
+  useEffect(() => {
+    if (!activeTenantId) {
+      setFieldsByTab(EMPTY_FIELDS);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setEditingTab(null);
+    setDraft(null);
+    fetchBusinessDnaFields(activeTenantId)
+      .then((data) => {
+        if (!cancelled) setFieldsByTab(data);
+      })
+      .catch((err) => console.error('Failed to load Business DNA:', err))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantId]);
 
   function startEdit(tab: EditableTabId) {
     setEditingTab(tab);
@@ -49,16 +72,21 @@ export function BusinessDNAProvider({ children }: { children: ReactNode }) {
   }
 
   function saveEdit() {
-    if (!editingTab || !draft) return;
+    if (!editingTab || !draft || !activeTenantId) return;
     const original = fieldsByTab[editingTab];
     const merged = draft.map((f, i) =>
-      f.value !== original[i].value
-        ? { ...f, status: 'verified' as const, sourceLabel: 'Owner input · just now' }
-        : f,
+      f.value !== original[i].value ? { ...f, status: 'verified' as const, sourceLabel: 'Owner input · just now' } : f,
     );
     setFieldsByTab((prev) => ({ ...prev, [editingTab]: merged }));
+    const changedTab = editingTab;
     setEditingTab(null);
     setDraft(null);
+    merged.forEach((field, i) => {
+      if (field.value === original[i].value) return;
+      persistDnaField(activeTenantId, changedTab, field).catch((err) =>
+        console.error('Failed to save Business DNA field:', err),
+      );
+    });
   }
 
   function updateDraftValue(index: number, value: string) {
@@ -70,18 +98,25 @@ export function BusinessDNAProvider({ children }: { children: ReactNode }) {
   }
 
   function setFieldValue(tab: EditableTabId, label: string, value: string) {
+    if (!activeTenantId) return;
+    const updated: DnaField = {
+      ...(fieldsByTab[tab].find((f) => f.label === label) ?? { label, value: '', status: 'required', sourceLabel: '' }),
+      value,
+      status: 'verified',
+      sourceLabel: 'Owner input · just now',
+    };
     setFieldsByTab((prev) => ({
       ...prev,
-      [tab]: prev[tab].map((f) =>
-        f.label === label ? { ...f, value, status: 'verified' as const, sourceLabel: 'Owner input · just now' } : f,
-      ),
+      [tab]: prev[tab].map((f) => (f.label === label ? updated : f)),
     }));
+    persistDnaField(activeTenantId, tab, updated).catch((err) => console.error('Failed to save Business DNA field:', err));
   }
 
   return (
     <BusinessDNAContext.Provider
       value={{
         fieldsByTab,
+        loading,
         editingTab,
         draft,
         startEdit,

@@ -58,25 +58,6 @@ export interface Application {
 // rather than this file, so there are no fictional ids left to seed against.
 export const DEFAULT_APPLICATIONS: Application[] = [];
 
-// Keywords grounded in bEMG's actual Identity/Operating DNA ("Brand Management, AI
-// Consulting & Web Development"), used for deterministic title/description overlap
-// scoring in src/lib/matching.ts — not fabricated, drawn from the real profile above.
-export const BUSINESS_PROFILE_KEYWORDS = [
-  'small business',
-  'marketing',
-  'brand',
-  'branding',
-  'consulting',
-  'artificial intelligence',
-  ' ai ',
-  'website',
-  'web development',
-  'digital',
-  'technology',
-  'social media',
-  'advertising',
-];
-
 export function ringColorForMatch(pct: number): string {
   if (pct >= 85) return '#059669'; // verified
   if (pct >= 70) return '#d97706'; // inferred
@@ -106,115 +87,10 @@ export function evidenceCaption(field: DnaField): string {
   return `${EVIDENCE_LABEL[field.status]} · ${field.sourceLabel}`;
 }
 
-export const IDENTITY_FIELDS: DnaField[] = [
-  {
-    label: 'Company Description',
-    value: 'Not yet provided',
-    status: 'required',
-    sourceLabel: 'Your story — write this yourself; it grounds every AI-assisted draft in this app',
-    multiline: true,
-  },
-  { label: 'Legal Name', value: 'bEMG Business', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'Industry', value: 'Brand Management, AI Consulting & Web Development', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'Website', value: 'bryaneliotmg.com', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'Service Area', value: 'National', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'Headquarters City', value: 'Not yet provided', status: 'required', sourceLabel: 'No city on file — add to unlock location-based programs' },
-  { label: 'Ownership Structure', value: 'Not yet provided', status: 'required', sourceLabel: 'Entity type/ownership not recorded yet' },
-  { label: 'Authorized Representative', value: 'Bryan Willis', status: 'verified', sourceLabel: 'bemg-platform company profile · founder listed' },
-  { label: 'Contact Email', value: 'bryan@bemgbusiness.com', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'Contact Phone', value: '+1 (601) 331-6132', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'EIN / Tax ID', value: 'Not yet provided', status: 'required', sourceLabel: 'Required for federal grant applications' },
-  { label: 'SAM.gov Unique Entity ID (UEI)', value: 'Not yet provided', status: 'required', sourceLabel: 'Register at SAM.gov — required before applying to any federal grant' },
-];
-
-export const FINANCIAL_FIELDS: DnaField[] = [
-  { label: 'Subscription Tier', value: 'Starter', status: 'verified', sourceLabel: 'bemg-platform tenant record · synced today' },
-  { label: 'Revenue (TTM)', value: 'Not yet provided', status: 'required', sourceLabel: 'Connect accounting software or enter manually' },
-  { label: 'Revenue Growth', value: 'Not available', status: 'required', sourceLabel: 'Needs revenue history to calculate' },
-  { label: 'Net Margin', value: 'Not yet provided', status: 'required', sourceLabel: 'Needs revenue + expense data' },
-  { label: 'Cash Flow', value: 'Not yet provided', status: 'required', sourceLabel: 'Connect a bank feed to calculate' },
-  { label: 'Outstanding Debt', value: 'Not yet provided', status: 'required', sourceLabel: 'Not recorded yet' },
-  { label: '2024 Tax Return', value: 'Not yet provided', status: 'required', sourceLabel: 'Upload to unlock Financial DNA' },
-];
-
-// A tenant's "website_info" comes from bemg-platform's Brand Voice feature
-// (website_profiles.brand_snapshot.website_info) — it only exists once a tenant
-// has run a website scan there, so it must stay optional. buildOperatingFields
-// below degrades to just the base fields when it's null, never fabricating a
-// tagline/positioning that wasn't actually generated for this business.
-export interface WebsiteInfo {
-  tagline: string;
-  about: string;
-}
-
-// Real one-time snapshot for bEMG's own tenant (354f6633-0b25-491f-b7b3-b7a1e7f02ac4),
-// pulled from website_profiles.brand_snapshot.website_info · generated 2026-09-03.
-const BEMG_WEBSITE_INFO: WebsiteInfo | null = {
-  tagline: 'Your business deserves to look as good as it actually is.',
-  about:
-    'bEMG builds and runs the digital infrastructure so solo operators can focus on the work that actually moves their business. It connects your website, social media, phone, and contacts into one automated system running on your behalf.',
-};
-
-function buildOperatingFields(websiteInfo: WebsiteInfo | null): DnaField[] {
-  const base: DnaField[] = [
-    {
-      label: 'Business Model',
-      value: 'Done-for-you subscription platform for solo entrepreneurs and small service businesses',
-      status: 'verified',
-      sourceLabel: 'bemg-platform company profile · synced today',
-    },
-    {
-      label: 'Products & Services',
-      value: 'Social Media Automation, Website Design & Management, App Development, AI Receptionist, Digital Business Card, Lead Manager, Signal Newsletter, Directory Listing',
-      status: 'verified',
-      sourceLabel: 'bemg-platform company profile · synced today',
-    },
-    { label: 'Customers', value: '605 contacts in CRM', status: 'verified', sourceLabel: 'bemg-platform contacts table · live' },
-    { label: 'Content Activity', value: '85 posts drafted · 79 published', status: 'verified', sourceLabel: 'bemg-platform content table · live' },
-    { label: 'Newsletter', value: '14 Signal issues sent', status: 'verified', sourceLabel: 'bemg-platform signals table · live' },
-    {
-      label: 'Market',
-      value: 'Solo entrepreneurs & small service businesses — barbershops, salons, restaurants, spas, fitness studios, consultants',
-      status: 'verified',
-      sourceLabel: 'bemg-platform company profile · synced today',
-    },
-    { label: 'Team', value: 'Not yet provided', status: 'required', sourceLabel: 'Employee count not recorded yet' },
-  ];
-
-  if (!websiteInfo) return base;
-
-  return [
-    ...base,
-    {
-      label: 'Tagline',
-      value: websiteInfo.tagline,
-      status: 'inferred',
-      sourceLabel: 'bemg-platform Brand Voice · website scan · Sep 3, 2026',
-    },
-    {
-      label: 'Brand Positioning',
-      value: websiteInfo.about,
-      status: 'inferred',
-      sourceLabel: 'bemg-platform Brand Voice · website scan · Sep 3, 2026',
-    },
-  ];
-}
-
-export const OPERATING_FIELDS: DnaField[] = buildOperatingFields(BEMG_WEBSITE_INFO);
-
-export const GROWTH_FIELDS: DnaField[] = [
-  { label: 'Trajectory', value: 'Not yet provided', status: 'required', sourceLabel: 'No growth trajectory on file yet' },
-  { label: 'Expansion Plan', value: 'Not yet provided', status: 'required', sourceLabel: 'No expansion plan on file yet' },
-  { label: 'Capital Requirement', value: 'Not yet provided', status: 'required', sourceLabel: 'Tell us what you need funding for' },
-  { label: 'Intended Use of Funds', value: 'Not yet provided', status: 'required', sourceLabel: 'No use-of-funds breakdown yet' },
-];
-
-export const FUNDING_FIELDS: DnaField[] = [
-  { label: 'Grants Awarded', value: 'Not yet provided', status: 'required', sourceLabel: 'No prior grant history on file' },
-  { label: 'Loans', value: 'Not yet provided', status: 'required', sourceLabel: 'No prior loan history on file' },
-  { label: 'Equity Raised', value: 'None to date', status: 'verified', sourceLabel: 'No equity or cap table on file' },
-  { label: 'Applications Submitted', value: '0 total', status: 'verified', sourceLabel: 'bEMG Capital platform history · live' },
-];
+// Business DNA field data lives in Supabase now (business_dna_fields, tenant-scoped —
+// see src/lib/businessDnaStore.ts), not here. Every tenant's actual facts were migrated
+// in via a one-time seed migration when this moved from a single hardcoded bEMG profile
+// to a real multi-tenant model.
 
 export interface DnaTabDef {
   id: 'identity' | 'financial' | 'operating' | 'growth' | 'funding' | 'readiness';
@@ -222,6 +98,8 @@ export interface DnaTabDef {
   desc: string;
   complete: boolean;
 }
+
+export type EditableTabId = Exclude<DnaTabDef['id'], 'readiness'>;
 
 export const DNA_TAB_DEFS: DnaTabDef[] = [
   { id: 'identity', label: 'Identity', desc: 'Legal, location, ownership', complete: false },

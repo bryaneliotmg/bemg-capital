@@ -26,6 +26,7 @@ import { STATUS_META } from '../data/sampleData';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
 import { buildOrgInfoPrompt, buildNarrativePrompt } from '../lib/prompts';
+import { extractKeywords } from '../lib/keywords';
 
 type Section = 'overview' | 'organization' | 'narrative' | 'review';
 
@@ -35,48 +36,6 @@ const SECTION_DEFS: { id: Section; label: string; desc: string }[] = [
   { id: 'narrative', label: 'Project Narrative', desc: 'Guided, section by section' },
   { id: 'review', label: 'Review & Submit', desc: 'Final checklist' },
 ];
-
-const STOPWORDS = new Set([
-  // Common function words
-  'their', 'which', 'been', 'also', 'such', 'than', 'they', 'them', 'these', 'those',
-  'about', 'after', 'before', 'under', 'over', 'more', 'most', 'some', 'each', 'every',
-  'other', 'only', 'when', 'where', 'while', 'through', 'include', 'including', 'shall',
-  'should', 'would', 'could', 'within', 'without',
-  // Grant-administration boilerplate — repeats across nearly every listing regardless
-  // of subject matter, so it isn't a useful topical-alignment signal even though it's
-  // frequent. Deliberately keeps domain/substance words (research, clinical, health,
-  // technology, commercial, innovation, etc.) untouched.
-  'applicant', 'applicants', 'application', 'applications', 'funding', 'opportunity',
-  'program', 'programs', 'grant', 'grants', 'period', 'periods', 'provide', 'provides',
-  'provided', 'providing', 'process', 'processes', 'national', 'institutes', 'institute',
-  'receive', 'receives', 'received', 'receiving', 'review', 'reviews', 'reviewed',
-  'require', 'requires', 'required', 'requirement', 'requirements', 'information',
-  'additional', 'eligible', 'eligibility', 'activities', 'activity', 'specific',
-  'individual', 'individuals', 'organization', 'organizations', 'support', 'supports',
-  'supported', 'supporting', 'project', 'projects', 'public', 'private', 'federal',
-  'government', 'office', 'department', 'agency', 'agencies', 'announcement',
-  'announcements', 'submission', 'submissions', 'submit', 'submitted', 'submitting',
-  'deadline', 'deadlines', 'award', 'awards', 'awarded', 'awarding', 'budget', 'budgets',
-  'proposal', 'proposals', 'document', 'documents', 'guidelines', 'guidance', 'policy',
-  'policies', 'section', 'sections', 'please', 'further', 'details', 'instructions',
-  'instruction', 'based', 'current', 'currently', 'certain', 'various', 'general',
-  'generally', 'relevant', 'related', 'regarding', 'necessary', 'appropriate', 'expected',
-  'existing', 'ensure', 'ensuring', 'means', 'meaning', 'purpose', 'purposes', 'result',
-  'results', 'resulting', 'level', 'levels', 'total', 'years', 'months', 'dates',
-]);
-
-function extractKeywords(text: string, max = 25): string[] {
-  const counts = new Map<string, number>();
-  const words = text.toLowerCase().match(/[a-z]{5,}/g) ?? [];
-  for (const w of words) {
-    if (STOPWORDS.has(w)) continue;
-    counts.set(w, (counts.get(w) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, max)
-    .map(([w]) => w);
-}
 
 function parseDollarAmount(raw: string): number | null {
   const cleaned = raw.replace(/[, ]/g, '');

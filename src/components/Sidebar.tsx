@@ -10,7 +10,7 @@ const navItemClass = ({ isActive }: { isActive: boolean }) =>
   );
 
 export function Sidebar() {
-  const { session, signOut } = useAuth();
+  const { session, signOut, isAdmin, availableTenants, activeTenantId, setActiveTenantId } = useAuth();
   const email = session?.user?.email ?? '';
   const initial = email ? email[0].toUpperCase() : 'B';
 
@@ -30,6 +30,25 @@ export function Sidebar() {
           <div className="text-[10px] font-bold uppercase tracking-wide text-sidebar-text">Demo workspace</div>
         </div>
       </div>
+
+      {isAdmin && availableTenants.length > 0 && (
+        <div className="px-1.5 pb-5">
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text/60 mb-1.5">
+            Acting as
+          </div>
+          <select
+            value={activeTenantId ?? ''}
+            onChange={(e) => setActiveTenantId(e.target.value)}
+            className="w-full bg-sidebar-hover text-sidebar-text-active text-[12.5px] font-semibold rounded-lg px-2.5 py-2 outline-none border border-transparent focus:border-accent"
+          >
+            {availableTenants.map((t) => (
+              <option key={t.id} value={t.id} className="text-ink bg-surface">
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text/60 px-2.5 pt-2 pb-1.5">
         Capital
