@@ -26,7 +26,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // page was blocked or the extraction itself found nothing.
   if (req.query.debug) {
     try {
-      const { status, bodyText, links } = await fetchRenderedPage('https://www.helloalice.com/opportunities');
+      const waitMs = req.query.wait ? Number(req.query.wait) : undefined;
+      const { status, bodyText, links } = await fetchRenderedPage(
+        'https://www.helloalice.com/opportunities',
+        waitMs,
+      );
       res.status(200).json({
         status,
         bodyLength: bodyText.length,
