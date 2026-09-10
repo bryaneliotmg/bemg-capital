@@ -1,16 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { syncHelloAlice } from '../_lib/sources/helloAlice.js';
-import { fetchRenderedPage } from '../_lib/browserFetch.js';
 
-// A plain fetch() to helloalice.com gets a 403 (basic bot filtering on request
-// headers) — confirmed via direct testing before this was built. A real headless
-// browser (see api/_lib/browserFetch.ts) with a realistic user agent gets through
-// fine, no login required to view the public opportunities list. MBDA.gov, by
-// contrast, runs an interactive Cloudflare challenge ("Just a moment...") that a
-// headless browser alone doesn't clear — that's a meaningfully harder wall and is
-// deliberately not being fought right now; Hello Alice's page already has real
-// grant listings, including demographic-targeted ones (e.g. women-owned grants)
-// that Grants.gov's federal-only data never surfaces.
+// KNOWN NOT WORKING as of 2026-09 — kept in place pending a decision on how (or
+// whether) to proceed. A plain fetch() to helloalice.com 403's (basic bot filtering
+// on request headers); a real headless browser with a realistic user agent got past
+// that layer during local development, but from Vercel's own serverless IPs it hits
+// "Vercel Security Checkpoint" — Vercel's own bot-detection product, evidently
+// running on Hello Alice's (also Vercel-hosted) side, actively fingerprinting this
+// as automated ("Failed to verify your browser — Code 21") rather than just being
+// slow to pass. Confirmed via direct testing (including a 12s wait) that this is a
+// hard rejection, not a timing issue. Every real run currently returns found:0 — see
+// api/_lib/browserFetch.ts and api/_lib/sources/helloAlice.ts for the pipeline this
+// would need a stealth-patched browser or a commercial anti-detect browser API to
+// actually clear.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
@@ -19,28 +21,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-  }
-
-  // Temporary debug path (?debug=1): reports exactly what the headless browser saw
-  // from Vercel's serverless IP, since a plain 403/found:0 doesn't say whether the
-  // page was blocked or the extraction itself found nothing.
-  if (req.query.debug) {
-    try {
-      const waitMs = req.query.wait ? Number(req.query.wait) : undefined;
-      const { status, bodyText, links } = await fetchRenderedPage(
-        'https://www.helloalice.com/opportunities',
-        waitMs,
-      );
-      res.status(200).json({
-        status,
-        bodyLength: bodyText.length,
-        bodySnippet: bodyText.slice(0, 1500),
-        linkCount: links.length,
-      });
-    } catch (err) {
-      res.status(500).json({ debugError: err instanceof Error ? err.message : String(err) });
-    }
-    return;
   }
 
   try {
