@@ -132,18 +132,18 @@ export async function classifyUnclassifiedOpportunities(
   supabase: SupabaseClient<any>,
   ids: string[],
   concurrency = 5,
-): Promise<{ classified: number; errorCount: number }> {
-  if (ids.length === 0) return { classified: 0, errorCount: 0 };
+): Promise<{ classified: number; errorCount: number; errors: string[] }> {
+  if (ids.length === 0) return { classified: 0, errorCount: 0, errors: [] };
 
   const { data: unclassified, error } = await supabase
     .from('funding_opportunities')
     .select('id, title, description')
     .in('id', ids)
     .is('primary_domain', null);
-  if (error || !unclassified) return { classified: 0, errorCount: 0 };
+  if (error || !unclassified) return { classified: 0, errorCount: 0, errors: [error?.message ?? 'no data'] };
 
   let classified = 0;
-  let errorCount = 0;
+  const errors: string[] = [];
   const queue = [...unclassified];
 
   async function worker() {
@@ -158,12 +158,12 @@ export async function classifyUnclassifiedOpportunities(
           .eq('id', opp.id);
         if (updateError) throw updateError;
         classified++;
-      } catch {
-        errorCount++;
+      } catch (err) {
+        errors.push(`${opp.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, unclassified.length) }, worker));
-  return { classified, errorCount };
+  return { classified, errorCount: errors.length, errors: errors.slice(0, 10) };
 }
