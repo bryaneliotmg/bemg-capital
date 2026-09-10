@@ -81,7 +81,7 @@ export function Dashboard() {
           </div>
           <div className="font-serif text-[32px] font-semibold">{loading ? '—' : opportunities.length}</div>
           <div className="mt-2 text-[11.5px] text-ink-3">
-            {loading ? 'Loading real federal opportunities…' : 'Federal grants, via Grants.gov'}
+            {loading ? 'Loading real grant opportunities…' : 'Federal + partner grants'}
           </div>
         </div>
 
@@ -106,7 +106,7 @@ export function Dashboard() {
           {loading ? (
             <div className="glass-card p-10 flex items-center justify-center gap-2.5 text-ink-3">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm font-semibold">Loading real federal opportunities…</span>
+              <span className="text-sm font-semibold">Loading real grant opportunities…</span>
             </div>
           ) : error ? (
             <div className="glass-card p-10 text-center text-sm font-semibold text-ink-3">

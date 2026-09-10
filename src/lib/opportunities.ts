@@ -65,7 +65,7 @@ function stripHtml(html: string): string {
 }
 
 const SELECT_COLUMNS =
-  'id, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories, agency_contact_name, agency_contact_email, agency_contact_phone';
+  'id, source, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories, agency_contact_name, agency_contact_email, agency_contact_phone';
 
 export async function getMatchedOpportunities(profile: BusinessProfile): Promise<MatchedOpportunity[]> {
   const { data, error } = await supabase.from('funding_opportunities').select(SELECT_COLUMNS);

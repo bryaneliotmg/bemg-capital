@@ -4,11 +4,15 @@
   "installCommand": "npm install",
   "functions": {
     "api/cron/sync-grants.ts": { "maxDuration": 60 },
+    "api/cron/sync-hello-alice.ts": { "maxDuration": 60 },
     "api/search-grants.ts": { "maxDuration": 60 },
     "api/generate-narrative.ts": { "maxDuration": 60 },
     "api/reporter-examples.ts": { "maxDuration": 30 },
     "api/assess-alignment.ts": { "maxDuration": 60 }
   },
-  "crons": [{ "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" }],
+  "crons": [
+    { "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/sync-hello-alice", "schedule": "0 7 * * 1" }
+  ],
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }

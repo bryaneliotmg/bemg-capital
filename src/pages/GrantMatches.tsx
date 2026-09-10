@@ -144,7 +144,7 @@ export function GrantMatches() {
       {loading ? (
         <div className="glass-card p-10 flex items-center justify-center gap-2.5 text-ink-3">
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm font-semibold">Loading real federal opportunities…</span>
+          <span className="text-sm font-semibold">Loading real grant opportunities…</span>
         </div>
       ) : error ? (
         <div className="glass-card p-10 text-center text-ink-3">

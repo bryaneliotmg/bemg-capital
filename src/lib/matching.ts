@@ -4,6 +4,11 @@
 
 export interface RawFundingOpportunity {
   id: string;
+  /** Where this row came from — 'grants_gov' for the original federal source, or a
+   * non-federal source added later (e.g. 'hello_alice'). Only Grants.gov rows carry
+   * its numeric applicant-type facet codes, so eligibility is checked differently
+   * per source — see hasBusinessEligibility() below. */
+  source: string;
   opportunity_number: string | null;
   title: string;
   agency_name: string | null;
@@ -103,8 +108,13 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const status = opp.status ?? '';
   const codes = opp.eligibility_codes ?? [];
 
+  // Grants.gov's numeric applicant-type facet (00-99) only exists on Grants.gov rows —
+  // a non-federal source (e.g. Hello Alice) has no such field, but its entire premise
+  // is a small-business audience, so it clears the hard eligibility filter by source
+  // alone rather than by checking codes that will always be empty.
+  const isGrantsGov = opp.source === 'grants_gov';
   const isOpen = OPEN_STATUSES.has(status);
-  const hasBusinessEligibility = codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c));
+  const hasBusinessEligibility = isGrantsGov ? codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c)) : true;
 
   if (!isOpen || !hasBusinessEligibility) {
     return { eligible: false, matchPct: 0, reasons: [], caveats: [] };
@@ -113,7 +123,10 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const reasons: string[] = [];
   let score = 40; // base score for clearing the hard eligibility + open-status filter
 
-  if (codes.includes('12')) {
+  if (!isGrantsGov) {
+    reasons.push('Listed as a small-business opportunity on Hello Alice');
+    score += 15;
+  } else if (codes.includes('12')) {
     reasons.push('Eligible applicant type: Nonprofits with 501(c)(3) status');
     score += 15;
   } else if (codes.includes('13')) {
