@@ -46,9 +46,24 @@ export function GrantMatches() {
       .sort((a, b) => b.count - a.count);
   }, [opportunities]);
 
-  const visibleOpportunities = activeCategory
+  const categoryFiltered = activeCategory
     ? opportunities.filter((o) => o.fundingCategories.some((c) => c.id === activeCategory))
     : opportunities;
+
+  // The search box previously only triggered a live Grants.gov fetch — typing "ohio"
+  // added any newly-synced opportunities to the shared cache but never actually
+  // narrowed what's displayed, so the list looked unchanged even when nothing matched.
+  // Filtering the already-loaded list by the same typed term (title/description/
+  // eligibility text) makes the search box behave like a search, independent of
+  // whether a live sync finds anything new.
+  const searchTerm = searchInput.trim().toLowerCase();
+  const visibleOpportunities = searchTerm
+    ? categoryFiltered.filter((o) =>
+        `${o.name} ${o.description} ${o.applicantEligibilityDesc ?? ''} ${o.funder}`
+          .toLowerCase()
+          .includes(searchTerm),
+      )
+    : categoryFiltered;
 
   const selected = visibleOpportunities.find((g) => g.id === selectedId) ?? null;
 
@@ -85,10 +100,12 @@ export function GrantMatches() {
       </div>
       {searchError && <div className="text-[12px] text-required font-semibold mb-3">{searchError}</div>}
       <div className="text-[11px] text-ink-3 mb-4 leading-relaxed max-w-2xl">
-        Searches Grants.gov live and adds any new eligible matches to your list below. Demographic and
-        regional set-asides (minority-owned, urban, rural, veteran, etc.) aren't a separate structured
-        category in federal data — they show up in program text, so search for them as keywords rather
-        than a filter chip.
+        Typing filters the list below to opportunities whose title, description, or eligibility text
+        mentions your term. Click Search to also check Grants.gov live for anything not yet synced.
+        Federal grants are almost always nationwide — genuinely state-specific or demographic-restricted
+        programs (e.g. "Ohio only," "minority-owned only") are rare in this data source and, for
+        demographic set-asides specifically, largely phased out of federal grantmaking in recent years.
+        A 0-result filter usually means the federal data just doesn't have that, not that the search failed.
       </div>
 
       <div className="flex items-center gap-2.5 flex-wrap mb-5">
@@ -137,7 +154,11 @@ export function GrantMatches() {
         <div className="glass-card p-10 text-center text-ink-3">
           <Target className="w-7 h-7 mx-auto mb-3" />
           <div className="text-sm font-semibold">
-            {activeCategory ? 'No matches in this category.' : 'No eligible opportunities synced yet.'}
+            {searchTerm
+              ? `Nothing currently loaded mentions "${searchInput.trim()}" — click Search to check Grants.gov live, or this term may just not exist as a federal grant category.`
+              : activeCategory
+                ? 'No matches in this category.'
+                : 'No eligible opportunities synced yet.'}
           </div>
         </div>
       ) : (
