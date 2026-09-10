@@ -75,6 +75,20 @@ export interface MatchResult {
 const BUSINESS_ELIGIBLE_CODES = new Set(['12', '13', '22', '23', '25', '99']);
 const OPEN_STATUSES = new Set(['posted', 'forecasted']);
 
+// The highest score reachable from bare eligibility alone — clearing the hard filter
+// (40) plus the best-case eligibility-type bonus (15, small business) plus the best-case
+// status bonus (10, posted) — with ZERO keyword overlap or capital fit. Any score at or
+// below this reflects "technically eligible," not genuine alignment with what the
+// business actually does. A score above it is only reachable once at least one real
+// topical/capital signal has kicked in, which is why it's the right line for "worth
+// counting as identified funding" rather than an arbitrary round number.
+const BARE_ELIGIBILITY_CEILING = 40 + 15 + 10;
+
+// Threshold above which a match reflects more than bare eligibility — used to decide
+// which matches are strong enough to count toward "identified" funding on the Dashboard,
+// not just technically-eligible noise.
+export const STRONG_MATCH_THRESHOLD = BARE_ELIGIBILITY_CEILING + 5;
+
 // STTR (not SBIR) statutorily requires the small business to have a formal cooperative
 // R&D partnership with a U.S. nonprofit research institution — a named co-PI there, a
 // subcontract, a defined division of labor performing at least 30% of the work. This is

@@ -8,6 +8,7 @@ import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { useAuth } from '../context/AuthContext';
 import { buildOrgInfoSnapshot } from '../data/applicationFields';
+import { STRONG_MATCH_THRESHOLD } from '../lib/matching';
 
 const compactCurrency = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -31,7 +32,11 @@ export function Dashboard() {
   }, [activeTenantId]);
   const band = readinessBand(readiness);
   const dashboardGrants = opportunities.slice(0, 4);
-  const totalIdentified = opportunities.reduce((sum, o) => sum + (o.awardAmount ?? 0), 0);
+  // Only strong matches (see STRONG_MATCH_THRESHOLD) count toward "identified" funding —
+  // summing every technically-eligible match would overstate what the business could
+  // reasonably expect to win.
+  const strongMatches = opportunities.filter((o) => o.matchPct >= STRONG_MATCH_THRESHOLD);
+  const totalIdentified = strongMatches.reduce((sum, o) => sum + (o.awardAmount ?? 0), 0);
   const dnaCompletenessPct = dnaCompleteness(fieldsByTab);
 
   return (
@@ -88,7 +93,7 @@ export function Dashboard() {
             {loading ? '—' : totalIdentified > 0 ? compactCurrency.format(totalIdentified) : 'N/A'}
           </div>
           <div className="mt-2 text-[11.5px] text-ink-3">
-            {loading ? ' ' : `across ${opportunities.length} open opportunities`}
+            {loading ? ' ' : `across ${strongMatches.length} strong matches (${STRONG_MATCH_THRESHOLD}%+)`}
           </div>
         </div>
       </div>
