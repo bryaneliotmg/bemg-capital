@@ -57,6 +57,8 @@ export function extractKeywords(text: string, max = 25): string[] {
 const PROFILE_LABELS = new Set([
   'Industry',
   'Company Description',
+  'Mission Statement',
+  'Vision / Long-Term Impact',
   'Products & Services',
   'Market',
   'Business Model',
