@@ -33,6 +33,18 @@ export const STOPWORDS = new Set([
   'generally', 'relevant', 'related', 'regarding', 'necessary', 'appropriate', 'expected',
   'existing', 'ensure', 'ensuring', 'means', 'meaning', 'purpose', 'purposes', 'result',
   'results', 'resulting', 'level', 'levels', 'total', 'years', 'months', 'dates',
+
+  // Generic business/technology jargon — words like "systems" or "technology" show up
+  // in virtually every federal program description regardless of domain (a plant-pest
+  // survey system and a marketing automation system share nothing but the word), so
+  // treating them as topical-alignment signal produces confident-looking false
+  // positives. Real case that surfaced this: bEMG's Mission/Vision text (heavy on this
+  // kind of language) scored an 85% match on a USDA plant-disease grant purely because
+  // both mentioned "systems" and "technology" — zero actual relevance. Domain-specific
+  // words (marketing, brand, entrepreneurs, underserved, website, etc.) are untouched.
+  'systems', 'system', 'technology', 'technologies', 'infrastructure', 'resources',
+  'resource', 'management', 'development', 'solutions', 'solution', 'innovative',
+  'innovation', 'strategic', 'strategy', 'digital', 'goal', 'goals', 'available',
 ]);
 
 export function extractKeywords(text: string, max = 25): string[] {
