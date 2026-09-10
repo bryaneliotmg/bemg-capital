@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { syncHelloAlice } from '../_lib/sources/helloAlice.js';
+import { fetchRenderedPage } from '../_lib/browserFetch.js';
 
 // A plain fetch() to helloalice.com gets a 403 (basic bot filtering on request
 // headers) — confirmed via direct testing before this was built. A real headless
@@ -18,6 +19,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+  }
+
+  // Temporary debug path (?debug=1): reports exactly what the headless browser saw
+  // from Vercel's serverless IP, since a plain 403/found:0 doesn't say whether the
+  // page was blocked or the extraction itself found nothing.
+  if (req.query.debug) {
+    try {
+      const { status, bodyText, links } = await fetchRenderedPage('https://www.helloalice.com/opportunities');
+      res.status(200).json({
+        status,
+        bodyLength: bodyText.length,
+        bodySnippet: bodyText.slice(0, 1500),
+        linkCount: links.length,
+      });
+    } catch (err) {
+      res.status(500).json({ debugError: err instanceof Error ? err.message : String(err) });
+    }
+    return;
   }
 
   try {
