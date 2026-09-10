@@ -34,12 +34,21 @@ export type Domain = (typeof DOMAIN_TAXONOMY)[number];
 // as a mismatch against anything.
 export const WILDCARD_DOMAIN: Domain = 'Other / General Business Support';
 
-// The Gemini key on this project is free-tier, hard-limited to 5 requests/minute for
-// gemini-2.5-flash — discovered via a real backfill run that failed on 47/50 items
-// with RESOURCE_EXHAUSTED, all citing exactly that quota. The API's own error tells
-// us how long to actually wait ("retryDelay":"12s" in its JSON body) — use that
-// instead of guessing, since guessing wrong just wastes another attempt against the
-// same 60-second window.
+// The Gemini key on this project is free-tier. It turned out to carry TWO separate
+// quotas, discovered the hard way across two different backfill failures: a per-minute
+// cap (5 req/min — the first failure, 47/50 items RESOURCE_EXHAUSTED) and, underneath
+// that, a per-DAY cap of just 20 requests total for gemini-2.5-flash (the second
+// failure — same RESOURCE_EXHAUSTED error, but quotaId
+// "GenerateRequestsPerDayPerProjectPerModel-FreeTier"). These need different handling:
+// a per-minute 429 is worth waiting out (the API's own "retryDelay" is ~13s, comfortably
+// inside a 60s function). A per-day 429 is NOT worth waiting out — the API's suggested
+// retryDelay for that one is ~60s, which alone blows the function's entire time budget,
+// and waiting doesn't help anyway since the quota won't refill until midnight. So a
+// daily-quota error must fail fast, not retry.
+function isDailyQuotaExhausted(message: string): boolean {
+  return message.includes('GenerateRequestsPerDayPerProjectPerModel');
+}
+
 function extractRetryDelayMs(message: string): number | null {
   const match = message.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/);
   return match ? Math.ceil(parseFloat(match[1]) * 1000) + 500 : null;
@@ -51,6 +60,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 1500): 
       return await fn();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (isDailyQuotaExhausted(message)) throw err; // no point waiting ~60s for a quota that resets at midnight
       const isRateLimited = message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
       const isRetryable = message.includes('503') || message.includes('UNAVAILABLE') || isRateLimited;
       if (attempt < retries && isRetryable) {
@@ -146,6 +156,11 @@ export async function classifyTenantDomain(profileText: string): Promise<DomainC
  * retrying. This means a serverless function's ~60s budget only fits ~4 classifications
  * per invocation; any individual failure is swallowed so it doesn't fail the whole
  * sync — it just stays unclassified until the next sync or backfill call picks it up.
+ *
+ * There's also a separate, much lower ceiling underneath the per-minute one: only 20
+ * requests total PER DAY on this free-tier key. Once that's hit, every remaining item
+ * in this batch would fail the same way, so the loop stops at the first daily-quota
+ * error instead of working through (and re-erroring on) the rest of the list.
  */
 export async function classifyUnclassifiedOpportunities(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -175,7 +190,11 @@ export async function classifyUnclassifiedOpportunities(
       if (updateError) throw updateError;
       classified++;
     } catch (err) {
-      errors.push(`${opp.id}: ${err instanceof Error ? err.message : String(err)}`);
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${opp.id}: ${message}`);
+      // The day's quota is gone for every remaining item too — stop now rather than
+      // spend the rest of this invocation's time budget failing the same way repeatedly.
+      if (isDailyQuotaExhausted(message)) break;
     }
     if (i < unclassified.length - 1) {
       await new Promise((r) => setTimeout(r, 13000));

@@ -15,7 +15,8 @@
   },
   "crons": [
     { "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/sync-sba", "schedule": "0 7 1 * *" }
+    { "path": "/api/cron/sync-sba", "schedule": "0 7 1 * *" },
+    { "path": "/api/backfill-domains", "schedule": "0 5 * * *" }
   ],
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }
