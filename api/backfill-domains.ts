@@ -15,7 +15,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  // Classification is now strictly sequential with a ~13s pause between calls (see
+  // classifyUnclassifiedOpportunities's own comment — the Gemini key here is
+  // free-tier, 5 requests/minute), so a 60s function only fits ~4 per invocation
+  // regardless of what's requested. Default to 4 rather than a bigger number that
+  // just gets cut off by the timeout mid-batch.
+  const limit = req.query.limit ? Number(req.query.limit) : 4;
   const supabase = createClient(supabaseUrl, serviceKey);
 
   const { data: rows, error } = await supabase
@@ -29,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const ids = (rows ?? []).map((r) => r.id);
-  const result = await classifyUnclassifiedOpportunities(supabase, ids, 10);
+  const result = await classifyUnclassifiedOpportunities(supabase, ids);
 
   const { count: remaining } = await supabase
     .from('funding_opportunities')

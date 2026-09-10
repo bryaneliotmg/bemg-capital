@@ -34,15 +34,28 @@ export type Domain = (typeof DOMAIN_TAXONOMY)[number];
 // as a mismatch against anything.
 export const WILDCARD_DOMAIN: Domain = 'Other / General Business Support';
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1500): Promise<T> {
+// The Gemini key on this project is free-tier, hard-limited to 5 requests/minute for
+// gemini-2.5-flash — discovered via a real backfill run that failed on 47/50 items
+// with RESOURCE_EXHAUSTED, all citing exactly that quota. The API's own error tells
+// us how long to actually wait ("retryDelay":"12s" in its JSON body) — use that
+// instead of guessing, since guessing wrong just wastes another attempt against the
+// same 60-second window.
+function extractRetryDelayMs(message: string): number | null {
+  const match = message.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/);
+  return match ? Math.ceil(parseFloat(match[1]) * 1000) + 500 : null;
+}
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 1500): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const isRetryable = message.includes('503') || message.includes('UNAVAILABLE');
+      const isRateLimited = message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
+      const isRetryable = message.includes('503') || message.includes('UNAVAILABLE') || isRateLimited;
       if (attempt < retries && isRetryable) {
-        await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+        const wait = isRateLimited ? (extractRetryDelayMs(message) ?? 13000) : delayMs * (attempt + 1);
+        await new Promise((r) => setTimeout(r, wait));
         continue;
       }
       throw err;
@@ -123,15 +136,21 @@ export async function classifyTenantDomain(profileText: string): Promise<DomainC
  * exactly once, ever, regardless of how many times it's re-synced afterward (a plain
  * upsert that omits primary_domain/topic_tags leaves an existing classification
  * untouched, so re-syncing the same grant tomorrow doesn't reclassify it today's work).
- * Small bounded concurrency, not full parallelism, to stay well within a serverless
- * function's execution time limit; any individual classification failure is swallowed
- * so it doesn't fail the whole sync — it just stays unclassified until next time.
+ *
+ * Strictly sequential with a fixed pause between calls, not concurrent — the Gemini key
+ * on this project is free-tier, hard-limited to 5 requests/minute for gemini-2.5-flash
+ * (found via a real backfill run that failed on 47/50 items with RESOURCE_EXHAUSTED).
+ * That's a per-project ceiling, not a per-worker one, so running several calls at once
+ * just fails most of them instead of actually finishing faster — pacing every call
+ * ~13s apart (60s / 5 + a small margin) stays under the limit instead of hitting it and
+ * retrying. This means a serverless function's ~60s budget only fits ~4 classifications
+ * per invocation; any individual failure is swallowed so it doesn't fail the whole
+ * sync — it just stays unclassified until the next sync or backfill call picks it up.
  */
 export async function classifyUnclassifiedOpportunities(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any>,
   ids: string[],
-  concurrency = 5,
 ): Promise<{ classified: number; errorCount: number; errors: string[] }> {
   if (ids.length === 0) return { classified: 0, errorCount: 0, errors: [] };
 
@@ -144,26 +163,24 @@ export async function classifyUnclassifiedOpportunities(
 
   let classified = 0;
   const errors: string[] = [];
-  const queue = [...unclassified];
 
-  async function worker() {
-    while (queue.length > 0) {
-      const opp = queue.shift();
-      if (!opp) return;
-      try {
-        const { primaryDomain, topicTags } = await classifyGrantDomain(opp.title, opp.description ?? '');
-        const { error: updateError } = await supabase
-          .from('funding_opportunities')
-          .update({ primary_domain: primaryDomain, topic_tags: topicTags })
-          .eq('id', opp.id);
-        if (updateError) throw updateError;
-        classified++;
-      } catch (err) {
-        errors.push(`${opp.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+  for (let i = 0; i < unclassified.length; i++) {
+    const opp = unclassified[i];
+    try {
+      const { primaryDomain, topicTags } = await classifyGrantDomain(opp.title, opp.description ?? '');
+      const { error: updateError } = await supabase
+        .from('funding_opportunities')
+        .update({ primary_domain: primaryDomain, topic_tags: topicTags })
+        .eq('id', opp.id);
+      if (updateError) throw updateError;
+      classified++;
+    } catch (err) {
+      errors.push(`${opp.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (i < unclassified.length - 1) {
+      await new Promise((r) => setTimeout(r, 13000));
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, unclassified.length) }, worker));
   return { classified, errorCount: errors.length, errors: errors.slice(0, 10) };
 }
