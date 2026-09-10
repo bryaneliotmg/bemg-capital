@@ -80,19 +80,18 @@ export interface MatchResult {
 const BUSINESS_ELIGIBLE_CODES = new Set(['12', '13', '22', '23', '25', '99']);
 const OPEN_STATUSES = new Set(['posted', 'forecasted']);
 
-// The highest score reachable from bare eligibility alone — clearing the hard filter
-// (40) plus the best-case eligibility-type bonus (15, small business) plus the best-case
-// status bonus (10, posted) — with ZERO keyword overlap or capital fit. Any score at or
-// below this reflects "technically eligible," not genuine alignment with what the
-// business actually does. A score above it is only reachable once at least one real
-// topical/capital signal has kicked in, which is why it's the right line for "worth
-// counting as identified funding" rather than an arbitrary round number.
-const BARE_ELIGIBILITY_CEILING = 40 + 15 + 10;
-
-// Threshold above which a match reflects more than bare eligibility — used to decide
-// which matches are strong enough to count toward "identified" funding on the Dashboard,
-// not just technically-eligible noise.
-export const STRONG_MATCH_THRESHOLD = BARE_ELIGIBILITY_CEILING + 5;
+// Bare eligibility alone (clearing the hard filter, best-case eligibility-type bonus,
+// best-case status bonus) now tops out around 33 (20 + 8 + 5) — down from 65 (40+15+10).
+// Real cases showed 65 was far too generous: a USDA plant-disease grant and an NSF
+// astrophysics grant both crossed this 70% "strong match" threshold off a SINGLE
+// coincidental keyword hit (worth +10 under the old weights), because bare eligibility
+// alone already sat within one keyword-match of 70. Base/eligibility/status bonuses
+// were all roughly halved and the per-keyword weight raised (10→15, cap 30→45) so real
+// topical evidence — not just showing up eligible — has to do the actual work of
+// reaching "strong match": from the new ~33 ceiling, 70 requires roughly 3 genuine
+// keyword matches (3 × 15 = 45), i.e. substantive alignment, not one lucky word.
+// Kept at a fixed, familiar 70 (already used throughout this app's UI copy).
+export const STRONG_MATCH_THRESHOLD = 70;
 
 // STTR (not SBIR) statutorily requires the small business to have a formal cooperative
 // R&D partnership with a U.S. nonprofit research institution — a named co-PI there, a
@@ -121,37 +120,37 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   }
 
   const reasons: string[] = [];
-  let score = 40; // base score for clearing the hard eligibility + open-status filter
+  let score = 20; // base score for clearing the hard eligibility + open-status filter
 
   if (!isGrantsGov) {
     reasons.push('Listed as a small-business opportunity on Hello Alice');
-    score += 15;
+    score += 8;
   } else if (codes.includes('12')) {
     reasons.push('Eligible applicant type: Nonprofits with 501(c)(3) status');
-    score += 15;
+    score += 8;
   } else if (codes.includes('13')) {
     reasons.push('Eligible applicant type: Nonprofits without 501(c)(3) status');
-    score += 12;
+    score += 6;
   } else if (codes.includes('23')) {
     reasons.push('Eligible applicant type: Small businesses');
-    score += 15;
+    score += 8;
   } else if (codes.includes('22')) {
     reasons.push('Eligible applicant type: For-profit organizations');
-    score += 10;
+    score += 5;
   } else if (codes.includes('99')) {
     reasons.push('Eligibility: Unrestricted — open to any entity type');
-    score += 5;
+    score += 3;
   } else if (codes.includes('25')) {
     reasons.push('Eligibility: "Others" — check the full announcement for details');
-    score += 3;
+    score += 2;
   }
 
   if (status === 'posted') {
     reasons.push('Currently open for applications');
-    score += 10;
+    score += 5;
   } else {
     reasons.push('Forecasted — not open yet, but expected soon');
-    score += 5;
+    score += 3;
   }
 
   // Real case that surfaced this: an NSF "Geospace Cluster" solicitation (astrophysics/
@@ -173,13 +172,16 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
     reasons.push(
       `Mentions your focus area${matchedKeywords.length > 1 ? 's' : ''}: ${matchedKeywords.join(', ')}`,
     );
-    score += Math.min(matchedKeywords.length * 10, 30);
+    // The primary driver of score now, not a minor add-on — see STRONG_MATCH_THRESHOLD's
+    // comment for why the weight was raised (10→15/cap 30→45) alongside shrinking the
+    // bare-eligibility floor: real topical alignment should be what earns a high score.
+    score += Math.min(matchedKeywords.length * 15, 45);
   }
 
   if (profile.capitalRequirementMin != null && opp.award_ceiling != null) {
     if (opp.award_ceiling >= profile.capitalRequirementMin) {
       reasons.push(`Award ceiling ($${opp.award_ceiling.toLocaleString()}) covers your stated capital need`);
-      score += 10;
+      score += 15;
     }
   }
 
