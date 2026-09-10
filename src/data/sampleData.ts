@@ -121,3 +121,13 @@ export function readinessBand(score: number): ReadinessBand {
   if (score >= 40) return { label: 'Developing', color: '#d97706' };
   return { label: 'Building', color: '#8a8178' };
 }
+
+// Percentage of a tenant's Business DNA fields that are actually filled in
+// (status !== 'required') — used for the Dashboard's Business DNA metric so it
+// reflects whichever tenant is currently active, not a fixed demo number.
+export function dnaCompleteness(fieldsByTab: Record<EditableTabId, DnaField[]>): number {
+  const fields = Object.values(fieldsByTab).flat();
+  if (fields.length === 0) return 0;
+  const filled = fields.filter((f) => f.status !== 'required').length;
+  return Math.round((filled / fields.length) * 100);
+}

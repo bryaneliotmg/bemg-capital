@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
-import { readinessBand } from '../data/sampleData';
+import { readinessBand, dnaCompleteness } from '../data/sampleData';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
+import { useAuth } from '../context/AuthContext';
 import { buildOrgInfoSnapshot } from '../data/applicationFields';
-
-const DNA_COMPLETENESS = 46;
 
 const compactCurrency = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -21,12 +20,19 @@ export function Dashboard() {
   const navigate = useNavigate();
   const { hasApplication, startApplication } = useApplications();
   const { opportunities, loading, error } = useOpportunities();
-  const { getField } = useBusinessDNA();
+  const { fieldsByTab, getField } = useBusinessDNA();
+  const { activeTenantId } = useAuth();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [readiness, setReadiness] = useState(24);
+  // This is a manual "what-if" slider, not a computed score — reset it on tenant
+  // switch so it doesn't carry over a value dragged while looking at a different tenant.
+  useEffect(() => {
+    setReadiness(24);
+  }, [activeTenantId]);
   const band = readinessBand(readiness);
   const dashboardGrants = opportunities.slice(0, 4);
   const totalIdentified = opportunities.reduce((sum, o) => sum + (o.awardAmount ?? 0), 0);
+  const dnaCompletenessPct = dnaCompleteness(fieldsByTab);
 
   return (
     <div className="panel-enter">
@@ -58,7 +64,7 @@ export function Dashboard() {
           <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
             Business DNA
           </div>
-          <div className="font-serif text-[32px] font-semibold">{DNA_COMPLETENESS}%</div>
+          <div className="font-serif text-[32px] font-semibold">{dnaCompletenessPct}%</div>
           <button className="link-btn block mt-2 text-[11.5px] font-bold" onClick={() => navigate('/business-dna')}>
             Complete your profile →
           </button>
