@@ -31,6 +31,9 @@ export interface MatchedOpportunity {
   /** One-time AI-classified subject domain — null until the background classification
    * pass has run on this row (see api/_lib/domainTaxonomy.ts). */
   primaryDomain: string | null;
+  /** State/territory codes this grant is restricted to — null until classified, []
+   * once classified with no restriction found (nationwide/open). */
+  eligibleStates: string[] | null;
 }
 
 function formatAmount(floor: number | null, ceiling: number | null): string {
@@ -68,7 +71,7 @@ function stripHtml(html: string): string {
 }
 
 const SELECT_COLUMNS =
-  'id, source, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories, agency_contact_name, agency_contact_email, agency_contact_phone, primary_domain';
+  'id, source, opportunity_number, title, agency_name, agency_code, cfda_list, doc_type, status, open_date, close_date, award_floor, award_ceiling, eligibility_codes, description, announcement_url, applicant_eligibility_desc, funding_categories, agency_contact_name, agency_contact_email, agency_contact_phone, primary_domain, eligible_states';
 
 export async function getMatchedOpportunities(profile: BusinessProfile): Promise<MatchedOpportunity[]> {
   const { data, error } = await supabase.from('funding_opportunities').select(SELECT_COLUMNS);
@@ -107,6 +110,7 @@ export async function getMatchedOpportunities(profile: BusinessProfile): Promise
         agencyContactEmail: opp.agency_contact_email,
         agencyContactPhone: opp.agency_contact_phone,
         primaryDomain: opp.primary_domain,
+        eligibleStates: opp.eligible_states,
       };
       return matched;
     })

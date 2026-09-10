@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { classifyUnclassifiedOpportunities } from './_lib/domainTaxonomy.js';
+import { rankByTenantRelevance } from './_lib/relevanceRanking.js';
 
 // Backfill for opportunities synced before domain classification existed (going
 // forward, every sync source classifies new rows itself — see grantsSync.ts,
@@ -26,23 +27,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const limit = req.query.limit ? Number(req.query.limit) : 4;
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  const { data: rows, error } = await supabase
+  // Pull the whole outstanding pool (bounded generously — the current backlog is
+  // ~230), then rank it by how relevant each grant already looks to real tenants
+  // before picking which handful gets today's limited AI calls. Without this, the
+  // backlog would clear in whatever order it happened to be inserted — no reason
+  // that order would line up with what tenants are actually looking at right now.
+  const { data: candidateRows, error } = await supabase
     .from('funding_opportunities')
     .select('id')
-    .is('primary_domain', null)
-    .limit(limit);
+    .or('primary_domain.is.null,eligible_states.is.null')
+    .limit(500);
   if (error) {
     res.status(500).json({ error: error.message });
     return;
   }
 
-  const ids = (rows ?? []).map((r) => r.id);
+  const candidateIds = (candidateRows ?? []).map((r) => r.id);
+  const ranked = await rankByTenantRelevance(supabase, candidateIds);
+  const ids = ranked.slice(0, limit);
   const result = await classifyUnclassifiedOpportunities(supabase, ids);
 
   const { count: remaining } = await supabase
     .from('funding_opportunities')
     .select('id', { count: 'exact', head: true })
-    .is('primary_domain', null);
+    .or('primary_domain.is.null,eligible_states.is.null');
 
   res.status(200).json({ ok: true, attempted: ids.length, ...result, remaining });
 }

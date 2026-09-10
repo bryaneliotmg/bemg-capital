@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { getMatchedOpportunities, searchGrants, type MatchedOpportunity } from '../lib/opportunities';
 import { deriveKeywordsFromDnaFields, buildProfileText } from '../lib/keywords';
+import { extractStateFromLocation } from '../lib/location';
 import { useBusinessDNA } from './BusinessDNAContext';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -55,11 +56,14 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
     capitalField && capitalField.status !== 'required' ? parseDollarAmount(capitalField.value) ?? undefined : undefined;
   const keywords = deriveKeywordsFromDnaFields(fieldsByTab);
   const profileText = buildProfileText(fieldsByTab);
+  const hqField = getField('identity', 'Headquarters City');
+  const tenantState =
+    hqField && hqField.status !== 'required' ? extractStateFromLocation(hqField.value) ?? undefined : undefined;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getMatchedOpportunities({ keywords, capitalRequirementMin, domain: tenantDomain });
+      const data = await getMatchedOpportunities({ keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState });
       setOpportunities(data);
       setError(null);
     } catch (err) {
@@ -68,7 +72,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywords.join('|'), capitalRequirementMin, tenantDomain]);
+  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState]);
 
   useEffect(() => {
     if (dnaLoading) return;

@@ -33,6 +33,10 @@ export interface RawFundingOpportunity {
    * classification has run (e.g. right after a fresh sync, before the background
    * classification pass completes). */
   primary_domain: string | null;
+  /** State/territory codes this grant is restricted to (e.g. ["WA"]), extracted in the
+   * same one-time AI pass as primary_domain — null before classification has run, []
+   * once classified with no restriction found (nationwide/open). */
+  eligible_states: string[] | null;
 }
 
 export interface FundingCategory {
@@ -74,6 +78,10 @@ export interface BusinessProfile {
    * until the tenant has been classified (e.g. right after their first Business DNA
    * save, before the background classification call completes). */
   domain?: string;
+  /** The tenant's own USPS state code, parsed directly from their Business DNA
+   * "Headquarters City" field (see src/lib/location.ts) — not AI-inferred, since a
+   * tenant's own stated address is a fact, not something worth guessing at. */
+  state?: string;
 }
 
 // Duplicated from api/_lib/domainTaxonomy.ts's WILDCARD_DOMAIN rather than imported —
@@ -219,6 +227,34 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
         `This grant's primary focus (${opp.primary_domain}) doesn't match your business's classified focus (${profile.domain}) — any keyword overlap above may be coincidental, not genuine alignment.`,
       );
       score -= 30;
+    }
+  }
+
+  // Real case that surfaced this: a Spokane, WA-specific program surfacing as a top
+  // match for a Mississippi-based tenant — neither keyword overlap nor domain
+  // classification has any concept of "who is this actually open to, geographically."
+  // Extracted in the same one-time AI pass as primary_domain (see
+  // api/_lib/domainTaxonomy.ts), so — like the domain check above — this is a lookup
+  // against a stored fact, not a live judgment call. Skipped if either side is unknown
+  // (grant not yet classified, or tenant hasn't stated a location), and never treated
+  // as a hard exclusion — a bad extraction shouldn't hide a genuinely good match, just
+  // push it well below "strong match" with a caveat explaining why.
+  if (opp.eligible_states && opp.eligible_states.length > 0) {
+    if (profile.state) {
+      if (opp.eligible_states.includes(profile.state)) {
+        reasons.push(`Open to applicants in your state (${profile.state})`);
+        score += 10;
+      } else {
+        caveats.push(
+          `This grant is restricted to ${opp.eligible_states.join(', ')} — your business is listed in ${profile.state}, so you likely aren't eligible regardless of how well the keywords line up.`,
+        );
+        score -= 40;
+      }
+    } else {
+      caveats.push(
+        `This grant is restricted to specific states (${opp.eligible_states.join(', ')}) — add your business's location to Business DNA to see whether you qualify.`,
+      );
+      score -= 10;
     }
   }
 

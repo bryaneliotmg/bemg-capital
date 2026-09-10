@@ -34,6 +34,16 @@ export type Domain = (typeof DOMAIN_TAXONOMY)[number];
 // as a mismatch against anything.
 export const WILDCARD_DOMAIN: Domain = 'Other / General Business Support';
 
+// USPS state/territory codes — used to validate whatever the LLM returns for a grant's
+// geographic restriction (see classify()'s geography pass below) rather than trusting
+// free-text output. Anything not in this set is dropped, not guessed-and-kept.
+export const US_STATE_CODES = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA',
+  'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT',
+  'VA', 'WA', 'WV', 'WI', 'WY', 'DC', 'PR', 'GU', 'VI', 'AS', 'MP',
+]);
+
 // The Gemini key on this project is free-tier. It turned out to carry TWO separate
 // quotas, discovered the hard way across two different backfill failures: a per-minute
 // cap (5 req/min — the first failure, 47/50 items RESOURCE_EXHAUSTED) and, underneath
@@ -77,11 +87,24 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 1500): 
 export interface DomainClassification {
   primaryDomain: Domain;
   topicTags: string[];
+  /** State/territory codes this GRANT is restricted to, e.g. ["WA"] — empty means
+   * nationwide/no geographic restriction found. Always [] for a tenant classification
+   * (a business isn't "geographically restricted" the way a grant's eligibility can be);
+   * only meaningful when returned from classifyGrantDomain. */
+  eligibleStates: string[];
 }
 
-async function classify(subjectLabel: string, text: string): Promise<DomainClassification> {
+// Folded into the SAME Gemini call as domain classification, not a second call — the
+// free-tier key is capped at 20 requests/day total, so a separate location-only call
+// per grant would halve the number of grants classified per day for no reason, since
+// the model already reads the full text once anyway.
+async function classify(subjectLabel: string, text: string, includeGeography: boolean): Promise<DomainClassification> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured on server');
+
+  const geographyInstructions = includeGeography
+    ? `\n\nAlso determine "eligibleStates": a list of two-letter USPS state/territory codes (e.g. "WA", "MS", "DC", "PR") that applicants must be located in to qualify — ONLY if the text explicitly restricts who can apply to specific state(s) or a named region (e.g. "applicants must be located in eastern Washington", "open to small businesses in the Pacific Northwest", "serving rural Mississippi communities"). Return an EMPTY array if the program is open nationwide, if no geographic restriction is stated, or if a place name only appears as the funding agency's own office address (e.g. a federal agency headquartered in Washington, DC does not make its nationwide grants DC-only) — an empty array is the correct, common answer; do not guess a restriction that isn't clearly stated.`
+    : '';
 
   const prompt = `Classify the actual subject matter of the following ${subjectLabel}, based only on the text given.
 
@@ -90,12 +113,22 @@ ${DOMAIN_TAXONOMY.map((d) => `- ${d}`).join('\n')}
 
 Pick the domain that best describes what this is REALLY about — not its administrative type (e.g. "it's a grant" isn't a domain) and not generic boilerplate it might mention in passing (eligibility clauses, diversity/outreach language, funding-mechanism details). If it's a broad small-business program without one specific field, use "${WILDCARD_DOMAIN}" rather than forcing a specific-sounding one.
 
-Also return 3-6 short "topicTags" (lowercase, 1-3 words each) that are genuinely central to the subject.
+Also return 3-6 short "topicTags" (lowercase, 1-3 words each) that are genuinely central to the subject.${geographyInstructions}
 
 TEXT:
 ${text.slice(0, 4000)}
 
-Return JSON: { "primaryDomain": "...", "topicTags": ["...", ...] }`;
+Return JSON: { "primaryDomain": "...", "topicTags": ["...", ...]${includeGeography ? ', "eligibleStates": ["..."]' : ''} }`;
+
+  const properties: Record<string, unknown> = {
+    primaryDomain: { type: Type.STRING, enum: [...DOMAIN_TAXONOMY] },
+    topicTags: { type: Type.ARRAY, items: { type: Type.STRING } },
+  };
+  const required = ['primaryDomain', 'topicTags'];
+  if (includeGeography) {
+    properties.eligibleStates = { type: Type.ARRAY, items: { type: Type.STRING } };
+    required.push('eligibleStates');
+  }
 
   const ai = new GoogleGenAI({ apiKey: apiKey.replace(/[^\x20-\x7E]/g, '') });
   const response = await withRetry(() =>
@@ -104,40 +137,43 @@ Return JSON: { "primaryDomain": "...", "topicTags": ["...", ...] }`;
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            primaryDomain: { type: Type.STRING, enum: [...DOMAIN_TAXONOMY] },
-            topicTags: { type: Type.ARRAY, items: { type: Type.STRING } },
-          },
-          required: ['primaryDomain', 'topicTags'],
-        },
+        responseSchema: { type: Type.OBJECT, properties, required },
       },
     }),
   );
 
   const text_ = response.candidates?.[0]?.content?.parts?.[0]?.text ?? response.text ?? '';
   const clean = text_.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-  const parsed = JSON.parse(clean) as { primaryDomain: string; topicTags: string[] };
+  const parsed = JSON.parse(clean) as { primaryDomain: string; topicTags: string[]; eligibleStates?: string[] };
 
   const primaryDomain = (DOMAIN_TAXONOMY as readonly string[]).includes(parsed.primaryDomain)
     ? (parsed.primaryDomain as Domain)
     : WILDCARD_DOMAIN;
 
-  return { primaryDomain, topicTags: parsed.topicTags ?? [] };
+  const eligibleStates = (parsed.eligibleStates ?? [])
+    .map((s) => s.toUpperCase().trim())
+    .filter((s) => US_STATE_CODES.has(s));
+
+  return { primaryDomain, topicTags: parsed.topicTags ?? [], eligibleStates };
 }
 
-/** Classifies a grant/opportunity's real subject — called once per opportunity, at
- * ingest time (see grantsSync.ts, sbaGov.ts, import-grants.ts), never at match time. */
+/** Classifies a grant/opportunity's real subject AND, in the same call, whether it's
+ * geographically restricted — called once per opportunity, at ingest time (see
+ * grantsSync.ts, sbaGov.ts, import-grants.ts), never at match time. Real case that
+ * surfaced the geography gap: a Spokane, WA-specific program showing up as a top match
+ * for a Mississippi-based tenant, because keyword/domain matching alone has no concept
+ * of "who is this actually open to, geographically." */
 export async function classifyGrantDomain(title: string, description: string): Promise<DomainClassification> {
-  return classify('grant/funding opportunity', `${title}\n\n${description}`);
+  return classify('grant/funding opportunity', `${title}\n\n${description}`, true);
 }
 
 /** Classifies a tenant's business — called only when their Business DNA profile text
  * has meaningfully changed (see profile_fingerprint in tenant_domain_classification),
- * not on every page load. */
+ * not on every page load. No geography pass here — the tenant's own state comes
+ * straight from their Business DNA "Headquarters City" field (see src/lib/location.ts),
+ * which is more reliable than asking the model to infer it from prose. */
 export async function classifyTenantDomain(profileText: string): Promise<DomainClassification> {
-  return classify('small business', profileText);
+  return classify('small business', profileText, false);
 }
 
 /**
@@ -169,11 +205,14 @@ export async function classifyUnclassifiedOpportunities(
 ): Promise<{ classified: number; errorCount: number; errors: string[] }> {
   if (ids.length === 0) return { classified: 0, errorCount: 0, errors: [] };
 
+  // "Needs work" means missing EITHER field, not just primary_domain — a small number
+  // of rows were domain-classified before the geography pass existed, so this also
+  // catches those and backfills eligible_states for them without re-scanning everything.
   const { data: unclassified, error } = await supabase
     .from('funding_opportunities')
     .select('id, title, description')
     .in('id', ids)
-    .is('primary_domain', null);
+    .or('primary_domain.is.null,eligible_states.is.null');
   if (error || !unclassified) return { classified: 0, errorCount: 0, errors: [error?.message ?? 'no data'] };
 
   let classified = 0;
@@ -182,10 +221,10 @@ export async function classifyUnclassifiedOpportunities(
   for (let i = 0; i < unclassified.length; i++) {
     const opp = unclassified[i];
     try {
-      const { primaryDomain, topicTags } = await classifyGrantDomain(opp.title, opp.description ?? '');
+      const { primaryDomain, topicTags, eligibleStates } = await classifyGrantDomain(opp.title, opp.description ?? '');
       const { error: updateError } = await supabase
         .from('funding_opportunities')
-        .update({ primary_domain: primaryDomain, topic_tags: topicTags })
+        .update({ primary_domain: primaryDomain, topic_tags: topicTags, eligible_states: eligibleStates })
         .eq('id', opp.id);
       if (updateError) throw updateError;
       classified++;
