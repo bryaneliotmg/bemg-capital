@@ -54,7 +54,14 @@ function FieldRow({
           )
         ) : (
           <>
-            <div className={cn(field.multiline ? 'text-[13px] leading-relaxed whitespace-pre-line' : 'text-sm font-semibold')}>
+            <div
+              className={cn(
+                'w-full bg-surface-2 border border-line-2 rounded-lg px-3',
+                field.multiline
+                  ? 'py-2 min-h-[150px] text-[13px] leading-relaxed whitespace-pre-line'
+                  : 'py-1.5 text-sm font-semibold',
+              )}
+            >
               {field.value}
             </div>
             {field.status === 'required' && EXTERNAL_ACQUIRE_LINKS[field.label] && (
