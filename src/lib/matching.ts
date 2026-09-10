@@ -154,7 +154,20 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
     score += 5;
   }
 
-  const haystack = `${opp.title} ${opp.description ?? ''}`.toLowerCase();
+  // Real case that surfaced this: an NSF "Geospace Cluster" solicitation (astrophysics/
+  // space-weather research, 12,769 characters long) scored 85% for a small community
+  // arts nonprofit purely on keyword overlap — "black" from the standard "Historically
+  // Black Colleges and Universities" eligibility boilerplate at character 10,259,
+  // "community" from "the AGS research community" at 2,874, and "small" from
+  // "Distributed Array of Small Instruments" at 5,719. None of that is about the
+  // grant's actual subject — federal solicitations routinely bury generic diversity/
+  // eligibility/program-list boilerplate deep in long descriptions, and unlike the
+  // earlier buzzword-stopword fix, these are real, non-generic words (a grant that's
+  // actually about Black-owned businesses or community programs SHOULD match on them).
+  // The fix isn't blocklisting words, it's not reading that far: a grant's genuine
+  // topical summary is at the top, so only that (plus the title) counts toward overlap.
+  const DESCRIPTION_OVERLAP_WINDOW = 1200;
+  const haystack = `${opp.title} ${(opp.description ?? '').slice(0, DESCRIPTION_OVERLAP_WINDOW)}`.toLowerCase();
   const matchedKeywords = profile.keywords.filter((kw) => haystack.includes(kw));
   if (matchedKeywords.length > 0) {
     reasons.push(
