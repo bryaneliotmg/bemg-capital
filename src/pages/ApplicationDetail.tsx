@@ -16,6 +16,9 @@ import {
   Tags,
   Gauge,
   Copy,
+  Plus,
+  Trash2,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Ring } from '../components/Ring';
@@ -26,15 +29,17 @@ import { STATUS_META } from '../data/sampleData';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
 import { getChecklistItems, type ChecklistItemStatus } from '../data/checklistItems';
+import { BUDGET_CATEGORIES, type BudgetCategoryId } from '../data/budgetCategories';
 import { buildOrgInfoPrompt, buildNarrativePrompt } from '../lib/prompts';
 import { extractKeywords } from '../lib/keywords';
 
-type Section = 'overview' | 'organization' | 'narrative' | 'review';
+type Section = 'overview' | 'organization' | 'narrative' | 'budget' | 'review';
 
 const SECTION_DEFS: { id: Section; label: string; desc: string }[] = [
   { id: 'overview', label: 'Overview', desc: 'What this grant needs' },
   { id: 'organization', label: 'Organization Info', desc: 'SF-424 fields, pre-filled' },
   { id: 'narrative', label: 'Project Narrative', desc: 'Guided, section by section' },
+  { id: 'budget', label: 'Budget', desc: 'Line items by category' },
   { id: 'review', label: 'Review & Submit', desc: 'Final checklist' },
 ];
 
@@ -201,6 +206,10 @@ export function ApplicationDetail() {
     setApplicationStatus,
     recordAlignmentScore,
     updateChecklistItem,
+    getBudgetItems,
+    addBudgetItem,
+    updateBudgetItemField,
+    removeBudgetItem,
     updateOrgField,
     getNarrative,
     updateNarrative,
@@ -238,6 +247,8 @@ export function ApplicationDetail() {
   const rubricLabel = getRubricLabel(opportunity?.agencyCode, opportunity?.name ?? '');
   const progress = grantId ? narrativeProgress(grantId, sections) : { done: 0, total: sections.length };
   const checklistItems = useMemo(() => (opportunity ? getChecklistItems(opportunity) : []), [opportunity]);
+  const budgetItems = grantId ? getBudgetItems(grantId) : [];
+  const budgetTotal = budgetItems.reduce((sum, item) => sum + item.amount, 0);
 
   // Sourced from this application's own orgInfo snapshot (taken once from Business DNA
   // when the application was started), not a live read of Business DNA — edits here are
@@ -576,6 +587,7 @@ export function ApplicationDetail() {
             let dotClass = 'bg-inferred';
             if (s.id === 'organization') dotClass = orgReadyCount === applicationFields.length ? 'bg-verified' : 'bg-inferred';
             if (s.id === 'narrative') dotClass = progress.done === progress.total ? 'bg-verified' : 'bg-inferred';
+            if (s.id === 'budget') dotClass = budgetItems.length > 0 ? 'bg-verified' : 'bg-inferred';
             if (s.id === 'overview') dotClass = 'bg-verified';
             return (
               <button
@@ -906,6 +918,97 @@ export function ApplicationDetail() {
                       className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-accent resize-y"
                     />
                     <div className="text-[10.5px] text-ink-3 mt-1.5 text-right">{wordCount} words</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {activeSection === 'budget' && grantId && (
+            <div className="flex flex-col gap-4">
+              <div className="glass-card p-5 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-accent" />
+                  <span className="text-[13px] font-bold">Budget</span>
+                  <span className="text-[11px] font-bold text-ink-3 ml-2">{budgetItems.length} line items</span>
+                </div>
+                <div className="text-[15px] font-bold">
+                  ${budgetTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} total
+                </div>
+              </div>
+
+              <div className="glass-card p-5">
+                <div className="text-[13px] font-bold mb-2">Budget vs. Award Range</div>
+                {opportunity?.awardAmount == null ? (
+                  <div className="text-[12px] text-ink-2">
+                    This opportunity doesn't list a specific award amount to compare your budget against.
+                  </div>
+                ) : budgetTotal === 0 ? (
+                  <div className="text-[12px] text-ink-2">Add line items below to compare your total request.</div>
+                ) : budgetTotal > opportunity.awardAmount * 1.02 ? (
+                  <div className="text-[12px] text-required font-semibold">
+                    Your line-item total (${budgetTotal.toLocaleString()}) exceeds this award's ceiling ($
+                    {opportunity.awardAmount.toLocaleString()}) — trim the budget or scope the project down.
+                  </div>
+                ) : (
+                  <div className="text-[12px] text-verified font-semibold">
+                    Your line-item total (${budgetTotal.toLocaleString()}) fits within this award's ceiling (up to $
+                    {opportunity.awardAmount.toLocaleString()}).
+                  </div>
+                )}
+              </div>
+
+              {BUDGET_CATEGORIES.map((cat) => {
+                const items = budgetItems.filter((item) => item.category === cat.id);
+                const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
+                return (
+                  <div key={cat.id} className="glass-card p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-[13px] font-bold">{cat.label}</div>
+                      <div className="flex items-center gap-3">
+                        {subtotal > 0 && (
+                          <span className="text-[12px] font-bold text-ink-2">${subtotal.toLocaleString()}</span>
+                        )}
+                        <button
+                          className="flex items-center gap-1 text-[11px] font-bold text-accent"
+                          onClick={() => addBudgetItem(grantId, cat.id as BudgetCategoryId)}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add line item
+                        </button>
+                      </div>
+                    </div>
+                    {items.length === 0 ? (
+                      <div className="text-[11.5px] text-ink-3 italic">No line items yet.</div>
+                    ) : (
+                      <div className="flex flex-col gap-2.5">
+                        {items.map((item) => (
+                          <div key={item.id} className="flex items-start gap-2.5">
+                            <input
+                              value={item.label}
+                              onChange={(e) => updateBudgetItemField(grantId, item.id, { label: e.target.value })}
+                              placeholder="e.g. Program Coordinator, 0.5 FTE"
+                              className="flex-1 min-w-0 bg-surface-2 border border-line-2 rounded-lg px-2.5 py-1.5 text-[12.5px] outline-none focus:border-accent"
+                            />
+                            <input
+                              type="number"
+                              value={item.amount || ''}
+                              onChange={(e) =>
+                                updateBudgetItemField(grantId, item.id, { amount: Number(e.target.value) || 0 })
+                              }
+                              placeholder="$0"
+                              className="w-28 shrink-0 bg-surface-2 border border-line-2 rounded-lg px-2.5 py-1.5 text-[12.5px] outline-none focus:border-accent"
+                            />
+                            <button
+                              className="text-ink-3 hover:text-required shrink-0 mt-1.5"
+                              onClick={() => removeBudgetItem(grantId, item.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

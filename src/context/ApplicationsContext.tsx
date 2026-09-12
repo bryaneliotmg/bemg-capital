@@ -2,17 +2,22 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus, type OrgInfoField } from '../data/sampleData';
 import type { NarrativeSectionDef } from '../data/narrativeSections';
 import type { ChecklistItemState } from '../data/checklistItems';
+import type { BudgetCategoryId, BudgetItem } from '../data/budgetCategories';
 import { useAuth } from './AuthContext';
 import {
+  deleteBudgetItem,
   fetchApplications,
+  fetchBudgetItems,
   fetchNarratives,
   insertApplication,
+  insertBudgetItem,
   persistAlignmentScore,
   persistApplicationStatus,
   persistChecklistState,
   persistNarrativeBulk,
   persistNarrativeSection,
   persistOrgInfo,
+  updateBudgetItem,
 } from '../lib/applicationsStore';
 
 interface StartableOpportunity {
@@ -34,6 +39,14 @@ interface ApplicationsContextValue {
   setApplicationStatus: (grantId: string, status: OpportunityStatus, outcomeReason?: string | null) => void;
   recordAlignmentScore: (grantId: string, score: number) => void;
   updateChecklistItem: (grantId: string, itemId: string, patch: Partial<ChecklistItemState>) => void;
+  getBudgetItems: (grantId: string) => BudgetItem[];
+  addBudgetItem: (grantId: string, category: BudgetCategoryId) => void;
+  updateBudgetItemField: (
+    grantId: string,
+    itemId: string,
+    patch: Partial<Pick<BudgetItem, 'category' | 'label' | 'amount' | 'justification'>>,
+  ) => void;
+  removeBudgetItem: (grantId: string, itemId: string) => void;
   updateOrgField: (grantId: string, dnaLabel: string, value: string) => void;
   getNarrative: (grantId: string) => Record<string, string>;
   updateNarrative: (grantId: string, sectionId: string, value: string) => void;
@@ -49,6 +62,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const { activeTenantId: tenantId } = useAuth();
   const [applications, setApplications] = useState<Application[]>(DEFAULT_APPLICATIONS);
   const [narrativeByGrant, setNarrativeByGrant] = useState<NarrativeByGrant>({});
+  const [budgetItemsByGrant, setBudgetItemsByGrant] = useState<Record<string, BudgetItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -59,11 +73,12 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
-    Promise.all([fetchApplications(), fetchNarratives()])
-      .then(([apps, narratives]) => {
+    Promise.all([fetchApplications(), fetchNarratives(), fetchBudgetItems()])
+      .then(([apps, narratives, budgetItems]) => {
         if (cancelled) return;
         setApplications(apps);
         setNarrativeByGrant(narratives);
+        setBudgetItemsByGrant(budgetItems);
       })
       .catch((err) => console.error('Failed to load saved applications:', err))
       .finally(() => {
@@ -134,6 +149,72 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     runPersist(() => persistChecklistState(grantId, updatedState!));
   };
 
+  const getBudgetItems = (grantId: string) => budgetItemsByGrant[grantId] ?? [];
+
+  // Real CRUD against application_budget_items — doesn't fit this file's dominant
+  // "optimistic local update + fire-and-forget persist, surface failure via
+  // saveStatus" pattern quite as cleanly as the other mutators, because a freshly
+  // added row needs the server-assigned id before it can be edited or deleted. Add a
+  // temporary client-side id immediately for a responsive UI, then swap it for the
+  // real one once the insert resolves.
+  const addBudgetItem = (grantId: string, category: BudgetCategoryId) => {
+    if (!tenantId) return;
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const existing = budgetItemsByGrant[grantId] ?? [];
+    const newItem: BudgetItem = {
+      id: tempId,
+      grantId,
+      category,
+      label: '',
+      amount: 0,
+      justification: null,
+      position: existing.length,
+    };
+    setBudgetItemsByGrant((prev) => ({ ...prev, [grantId]: [...(prev[grantId] ?? []), newItem] }));
+    setSaveStatus('saving');
+    insertBudgetItem(
+      { grantId, category, label: '', amount: 0, justification: null, position: existing.length },
+      tenantId,
+    )
+      .then((realId) => {
+        setBudgetItemsByGrant((prev) => ({
+          ...prev,
+          [grantId]: (prev[grantId] ?? []).map((item) => (item.id === tempId ? { ...item, id: realId } : item)),
+        }));
+        setSaveStatus('saved');
+      })
+      .catch((err) => {
+        console.error('Failed to add budget item:', err);
+        setBudgetItemsByGrant((prev) => ({
+          ...prev,
+          [grantId]: (prev[grantId] ?? []).filter((item) => item.id !== tempId),
+        }));
+        setSaveStatus('error');
+      });
+  };
+
+  const updateBudgetItemField = (
+    grantId: string,
+    itemId: string,
+    patch: Partial<Pick<BudgetItem, 'category' | 'label' | 'amount' | 'justification'>>,
+  ) => {
+    setBudgetItemsByGrant((prev) => ({
+      ...prev,
+      [grantId]: (prev[grantId] ?? []).map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+    }));
+    if (itemId.startsWith('temp-')) return; // still being inserted — the insert already carries the initial values
+    runPersist(() => updateBudgetItem(itemId, patch));
+  };
+
+  const removeBudgetItem = (grantId: string, itemId: string) => {
+    setBudgetItemsByGrant((prev) => ({
+      ...prev,
+      [grantId]: (prev[grantId] ?? []).filter((item) => item.id !== itemId),
+    }));
+    if (itemId.startsWith('temp-')) return;
+    runPersist(() => deleteBudgetItem(itemId));
+  };
+
   const updateOrgField = (grantId: string, dnaLabel: string, value: string) => {
     let updatedOrgInfo: Record<string, OrgInfoField> | null = null;
     setApplications((prev) =>
@@ -196,6 +277,10 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
         setApplicationStatus,
         recordAlignmentScore,
         updateChecklistItem,
+        getBudgetItems,
+        addBudgetItem,
+        updateBudgetItemField,
+        removeBudgetItem,
         updateOrgField,
         getNarrative,
         updateNarrative,

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { Application, OpportunityStatus, OpportunityType, OrgInfoField } from '../data/sampleData';
 import type { ChecklistItemState } from '../data/checklistItems';
+import type { BudgetCategoryId, BudgetItem } from '../data/budgetCategories';
 
 interface ApplicationRow {
   grant_id: string;
@@ -132,5 +133,81 @@ export async function persistNarrativeBulk(
     updated_at: new Date().toISOString(),
   }));
   const { error } = await supabase.from('application_narratives').upsert(rows, { onConflict: 'grant_id,section_id' });
+  if (error) throw error;
+}
+
+interface BudgetItemRow {
+  id: string;
+  grant_id: string;
+  category: string;
+  label: string;
+  // supabase-js returns a Postgres `numeric` column as a string, not a number —
+  // must convert explicitly or the running total silently string-concatenates.
+  amount: string;
+  justification: string | null;
+  position: number;
+}
+
+// Real CRUD, not the composite-upsert shape narratives use — a category can hold
+// multiple line items, so there's no natural (grant_id, X) unique key to upsert on;
+// each row needs its own id-addressed insert/update/delete.
+export async function fetchBudgetItems(): Promise<Record<string, BudgetItem[]>> {
+  const { data, error } = await supabase
+    .from('application_budget_items')
+    .select('id, grant_id, category, label, amount, justification, position')
+    .order('position', { ascending: true });
+  if (error) throw error;
+  const byGrant: Record<string, BudgetItem[]> = {};
+  for (const row of (data ?? []) as BudgetItemRow[]) {
+    byGrant[row.grant_id] = byGrant[row.grant_id] ?? [];
+    byGrant[row.grant_id].push({
+      id: row.id,
+      grantId: row.grant_id,
+      category: row.category as BudgetCategoryId,
+      label: row.label,
+      amount: Number(row.amount),
+      justification: row.justification,
+      position: row.position,
+    });
+  }
+  return byGrant;
+}
+
+export async function insertBudgetItem(
+  item: Omit<BudgetItem, 'id'>,
+  tenantId: string,
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('application_budget_items')
+    .insert({
+      grant_id: item.grantId,
+      category: item.category,
+      label: item.label,
+      amount: item.amount,
+      justification: item.justification,
+      position: item.position,
+      tenant_id: tenantId,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+export async function updateBudgetItem(
+  id: string,
+  patch: Partial<Pick<BudgetItem, 'category' | 'label' | 'amount' | 'justification'>>,
+): Promise<void> {
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.category !== undefined) update.category = patch.category;
+  if (patch.label !== undefined) update.label = patch.label;
+  if (patch.amount !== undefined) update.amount = patch.amount;
+  if (patch.justification !== undefined) update.justification = patch.justification;
+  const { error } = await supabase.from('application_budget_items').update(update).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteBudgetItem(id: string): Promise<void> {
+  const { error } = await supabase.from('application_budget_items').delete().eq('id', id);
   if (error) throw error;
 }
