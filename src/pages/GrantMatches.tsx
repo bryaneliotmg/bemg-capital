@@ -141,6 +141,27 @@ export function GrantMatches() {
 
   return (
     <div className="panel-enter">
+      {!loading && (
+        <div className="glass-card p-[22px] mb-5 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-1.5">
+              Funding Identified
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-serif text-[28px] font-semibold text-accent">
+                {totalIdentified > 0 ? compactCurrency.format(totalIdentified) : 'N/A'}
+              </span>
+              <span className="text-[12.5px] text-ink-3">
+                across {strongVisibleMatches.length} strong match{strongVisibleMatches.length === 1 ? '' : 'es'}
+                {' '}({STRONG_MATCH_THRESHOLD}%+)
+              </span>
+            </div>
+          </div>
+          {(searchTerm || activeCategory || showFavoritesOnly) && (
+            <div className="text-[11px] text-ink-3 italic">Scoped to your current filter — clear it to see the full total</div>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-2.5 mb-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
@@ -238,17 +259,6 @@ export function GrantMatches() {
                 {cat.description} · {cat.count}
               </button>
             ))}
-          </div>
-        )}
-        {!loading && (
-          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-full border border-line-2 bg-surface-2">
-            <span className="text-[10px] font-extrabold uppercase tracking-wide text-ink-3">Funding Identified</span>
-            <span className="text-[13px] font-bold text-accent">
-              {totalIdentified > 0 ? compactCurrency.format(totalIdentified) : 'N/A'}
-            </span>
-            <span className="text-[11px] text-ink-3">
-              across {strongVisibleMatches.length} strong match{strongVisibleMatches.length === 1 ? '' : 'es'}
-            </span>
           </div>
         )}
       </div>
