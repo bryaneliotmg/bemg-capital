@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X, Copy, Upload } from 'lucide-react';
+import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X, Copy, Upload, Star } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
+import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
 import { ELIGIBILITY_LABELS, STRONG_MATCH_THRESHOLD } from '../lib/matching';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, buildOrgInfoSnapshot } from '../data/applicationFields';
@@ -28,9 +29,11 @@ export function GrantMatches() {
   const { opportunities, loading, error, search, searching, searchError, refresh } = useOpportunities();
   const { getField } = useBusinessDNA();
   const { isAdmin } = useAuth();
+  const { favoriteIds, isFavorited, toggleFavorite } = useFavorites();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [importText, setImportText] = useState('');
@@ -66,13 +69,16 @@ export function GrantMatches() {
   // eligibility text) makes the search box behave like a search, independent of
   // whether a live sync finds anything new.
   const searchTerm = searchInput.trim().toLowerCase();
-  const visibleOpportunities = searchTerm
+  const searchFiltered = searchTerm
     ? categoryFiltered.filter((o) =>
         `${o.name} ${o.description} ${o.applicantEligibilityDesc ?? ''} ${o.funder}`
           .toLowerCase()
           .includes(searchTerm),
       )
     : categoryFiltered;
+  const visibleOpportunities = showFavoritesOnly
+    ? searchFiltered.filter((o) => isFavorited(o.id))
+    : searchFiltered;
 
   const selected = visibleOpportunities.find((g) => g.id === selectedId) ?? null;
 
@@ -207,6 +213,14 @@ export function GrantMatches() {
             VC / Equity
           </div>
         </div>
+        <button
+          className={`chip ${showFavoritesOnly ? 'active' : ''}`}
+          onClick={() => setShowFavoritesOnly((v) => !v)}
+          disabled={favoriteIds.size === 0 && !showFavoritesOnly}
+        >
+          <Star className="w-[11px] h-[11px]" fill={showFavoritesOnly ? 'currentColor' : 'none'} />
+          Favorites · {favoriteIds.size}
+        </button>
         {categories.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {activeCategory && (
@@ -252,11 +266,13 @@ export function GrantMatches() {
         <div className="glass-card p-10 text-center text-ink-3">
           <Target className="w-7 h-7 mx-auto mb-3" />
           <div className="text-sm font-semibold">
-            {searchTerm
-              ? `Nothing currently loaded mentions "${searchInput.trim()}" — click Search to check Grants.gov live, or this term may just not exist as a federal grant category.`
-              : activeCategory
-                ? 'No matches in this category.'
-                : 'No eligible opportunities synced yet.'}
+            {showFavoritesOnly
+              ? "You haven't saved any favorites yet — click the star on a grant to pull it up here later."
+              : searchTerm
+                ? `Nothing currently loaded mentions "${searchInput.trim()}" — click Search to check Grants.gov live, or this term may just not exist as a federal grant category.`
+                : activeCategory
+                  ? 'No matches in this category.'
+                  : 'No eligible opportunities synced yet.'}
           </div>
         </div>
       ) : (
@@ -276,7 +292,24 @@ export function GrantMatches() {
                   style={{ border: `1px solid ${isSelected ? 'var(--color-accent)' : 'var(--color-line)'}` }}
                   onClick={() => setSelectedId(grant.id)}
                 >
-                  <GrantSummaryRow grant={grant} />
+                  <GrantSummaryRow
+                    grant={grant}
+                    trailing={
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(grant.id);
+                        }}
+                        className="p-1.5 -m-1.5 rounded-full hover:bg-surface-2 transition-colors shrink-0"
+                        title={isFavorited(grant.id) ? 'Remove from favorites' : 'Save for later'}
+                      >
+                        <Star
+                          className={`w-4 h-4 ${isFavorited(grant.id) ? 'text-accent' : 'text-ink-3'}`}
+                          fill={isFavorited(grant.id) ? 'currentColor' : 'none'}
+                        />
+                      </button>
+                    }
+                  />
                 </div>
               );
             })}
@@ -301,6 +334,16 @@ export function GrantMatches() {
                   {selected.opportunityNumber && (
                     <span className="text-[11px] text-ink-3 font-semibold">{selected.opportunityNumber}</span>
                   )}
+                  <button
+                    onClick={() => toggleFavorite(selected.id)}
+                    className="ml-auto flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full hover:bg-surface-2 transition-colors"
+                  >
+                    <Star
+                      className={`w-3.5 h-3.5 ${isFavorited(selected.id) ? 'text-accent' : 'text-ink-3'}`}
+                      fill={isFavorited(selected.id) ? 'currentColor' : 'none'}
+                    />
+                    {isFavorited(selected.id) ? 'Saved' : 'Save for later'}
+                  </button>
                 </div>
                 <div className="text-base font-bold mb-1">{selected.name}</div>
                 <div className="text-[12.5px] text-ink-2 mb-2">

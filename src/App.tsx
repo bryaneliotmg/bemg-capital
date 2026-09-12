@@ -10,6 +10,7 @@ import { Login } from './pages/Login';
 import { ApplicationsProvider } from './context/ApplicationsContext';
 import { OpportunitiesProvider } from './context/OpportunitiesContext';
 import { BusinessDNAProvider } from './context/BusinessDNAContext';
+import { FavoritesProvider } from './context/FavoritesContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function AuthGate({ children }: { children: ReactNode }) {
@@ -29,19 +30,21 @@ export default function App() {
         <AuthGate>
           <BusinessDNAProvider>
             <OpportunitiesProvider>
-              <ApplicationsProvider>
-                <Routes>
-                  <Route element={<Layout />}>
-                    <Route index element={<Navigate to="/dashboard" replace />} />
-                    <Route path="dashboard" element={<Dashboard />} />
-                    <Route path="business-dna" element={<BusinessDNA />} />
-                    <Route path="grants" element={<GrantMatches />} />
-                    <Route path="applications" element={<Applications />} />
-                    <Route path="applications/:grantId" element={<ApplicationDetail />} />
-                  </Route>
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-              </ApplicationsProvider>
+              <FavoritesProvider>
+                <ApplicationsProvider>
+                  <Routes>
+                    <Route element={<Layout />}>
+                      <Route index element={<Navigate to="/dashboard" replace />} />
+                      <Route path="dashboard" element={<Dashboard />} />
+                      <Route path="business-dna" element={<BusinessDNA />} />
+                      <Route path="grants" element={<GrantMatches />} />
+                      <Route path="applications" element={<Applications />} />
+                      <Route path="applications/:grantId" element={<ApplicationDetail />} />
+                    </Route>
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </ApplicationsProvider>
+              </FavoritesProvider>
             </OpportunitiesProvider>
           </BusinessDNAProvider>
         </AuthGate>
