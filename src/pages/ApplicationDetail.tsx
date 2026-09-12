@@ -25,6 +25,7 @@ import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { STATUS_META } from '../data/sampleData';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
+import { getChecklistItems, type ChecklistItemStatus } from '../data/checklistItems';
 import { buildOrgInfoPrompt, buildNarrativePrompt } from '../lib/prompts';
 import { extractKeywords } from '../lib/keywords';
 
@@ -199,6 +200,7 @@ export function ApplicationDetail() {
     getApplication,
     setApplicationStatus,
     recordAlignmentScore,
+    updateChecklistItem,
     updateOrgField,
     getNarrative,
     updateNarrative,
@@ -235,6 +237,7 @@ export function ApplicationDetail() {
   );
   const rubricLabel = getRubricLabel(opportunity?.agencyCode, opportunity?.name ?? '');
   const progress = grantId ? narrativeProgress(grantId, sections) : { done: 0, total: sections.length };
+  const checklistItems = useMemo(() => (opportunity ? getChecklistItems(opportunity) : []), [opportunity]);
 
   // Sourced from this application's own orgInfo snapshot (taken once from Business DNA
   // when the application was started), not a live read of Business DNA — edits here are
@@ -1053,6 +1056,48 @@ export function ApplicationDetail() {
                   </div>
                 )}
               </div>
+
+              {checklistItems.length > 0 && (
+                <div className="glass-card p-7">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="text-[15px] font-bold">Pre-Submission Requirements</div>
+                    <span className="text-[11px] font-bold text-ink-3">
+                      {checklistItems.filter((item) => (application.checklistState[item.id]?.status ?? 'pending') !== 'pending').length} of {checklistItems.length} resolved
+                    </span>
+                  </div>
+                  <div className="text-[12px] text-ink-2 mb-5">
+                    Deterministic, based on facts this opportunity's own listing states — not AI-guessed. Mark each
+                    complete, or not applicable if it genuinely doesn't apply to your situation.
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {checklistItems.map((item) => {
+                      const state = application.checklistState[item.id] ?? { status: 'pending' as const };
+                      return (
+                        <div key={item.id} className="p-4 rounded-xl bg-surface-2">
+                          <div className="flex items-start justify-between gap-3 mb-1">
+                            <div className="text-[13px] font-semibold">{item.label}</div>
+                            <select
+                              value={state.status}
+                              onChange={(e) =>
+                                grantId &&
+                                updateChecklistItem(grantId, item.id, {
+                                  status: e.target.value as ChecklistItemStatus,
+                                })
+                              }
+                              className="text-[11px] font-bold uppercase tracking-wide bg-surface border border-line-2 rounded-lg px-2 py-1 outline-none focus:border-accent shrink-0"
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="complete">Complete</option>
+                              <option value="not_applicable">Not applicable</option>
+                            </select>
+                          </div>
+                          <div className="text-[11.5px] text-ink-3">{item.reason}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="glass-card p-7">
                 <div className="flex items-center gap-2 mb-1.5">

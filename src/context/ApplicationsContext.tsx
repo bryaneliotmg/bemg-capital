@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_APPLICATIONS, type Application, type OpportunityStatus, type OrgInfoField } from '../data/sampleData';
 import type { NarrativeSectionDef } from '../data/narrativeSections';
+import type { ChecklistItemState } from '../data/checklistItems';
 import { useAuth } from './AuthContext';
 import {
   fetchApplications,
@@ -8,6 +9,7 @@ import {
   insertApplication,
   persistAlignmentScore,
   persistApplicationStatus,
+  persistChecklistState,
   persistNarrativeBulk,
   persistNarrativeSection,
   persistOrgInfo,
@@ -31,6 +33,7 @@ interface ApplicationsContextValue {
   getApplication: (grantId: string) => Application | undefined;
   setApplicationStatus: (grantId: string, status: OpportunityStatus, outcomeReason?: string | null) => void;
   recordAlignmentScore: (grantId: string, score: number) => void;
+  updateChecklistItem: (grantId: string, itemId: string, patch: Partial<ChecklistItemState>) => void;
   updateOrgField: (grantId: string, dnaLabel: string, value: string) => void;
   getNarrative: (grantId: string) => Record<string, string>;
   updateNarrative: (grantId: string, sectionId: string, value: string) => void;
@@ -94,6 +97,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       outcomeReason: null,
       alignmentScore: null,
       alignmentComputedAt: null,
+      checklistState: {},
       deadline: opportunity.deadline,
       orgInfo,
     };
@@ -114,6 +118,20 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       prev.map((a) => (a.grantId === grantId ? { ...a, alignmentScore: score, alignmentComputedAt: computedAt } : a)),
     );
     runPersist(() => persistAlignmentScore(grantId, score));
+  };
+
+  const updateChecklistItem = (grantId: string, itemId: string, patch: Partial<ChecklistItemState>) => {
+    let updatedState: Record<string, ChecklistItemState> | null = null;
+    setApplications((prev) =>
+      prev.map((a) => {
+        if (a.grantId !== grantId) return a;
+        const current = a.checklistState[itemId] ?? { status: 'pending' as const };
+        updatedState = { ...a.checklistState, [itemId]: { ...current, ...patch } };
+        return { ...a, checklistState: updatedState };
+      }),
+    );
+    if (!tenantId || !updatedState) return;
+    runPersist(() => persistChecklistState(grantId, updatedState!));
   };
 
   const updateOrgField = (grantId: string, dnaLabel: string, value: string) => {
@@ -177,6 +195,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
         getApplication,
         setApplicationStatus,
         recordAlignmentScore,
+        updateChecklistItem,
         updateOrgField,
         getNarrative,
         updateNarrative,

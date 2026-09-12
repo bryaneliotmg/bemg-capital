@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { Application, OpportunityStatus, OpportunityType, OrgInfoField } from '../data/sampleData';
+import type { ChecklistItemState } from '../data/checklistItems';
 
 interface ApplicationRow {
   grant_id: string;
@@ -9,6 +10,7 @@ interface ApplicationRow {
   outcome_reason: string | null;
   alignment_score: number | null;
   alignment_computed_at: string | null;
+  checklist_state: Record<string, ChecklistItemState> | null;
   deadline: string;
   org_info: Record<string, OrgInfoField> | null;
 }
@@ -22,7 +24,9 @@ interface NarrativeRow {
 export async function fetchApplications(): Promise<Application[]> {
   const { data, error } = await supabase
     .from('applications')
-    .select('grant_id, name, opportunity_type, status, outcome_reason, alignment_score, alignment_computed_at, deadline, org_info');
+    .select(
+      'grant_id, name, opportunity_type, status, outcome_reason, alignment_score, alignment_computed_at, checklist_state, deadline, org_info',
+    );
   if (error) throw error;
   return (data ?? []).map((row: ApplicationRow) => ({
     grantId: row.grant_id,
@@ -32,6 +36,7 @@ export async function fetchApplications(): Promise<Application[]> {
     outcomeReason: row.outcome_reason,
     alignmentScore: row.alignment_score,
     alignmentComputedAt: row.alignment_computed_at,
+    checklistState: row.checklist_state ?? {},
     deadline: row.deadline,
     orgInfo: row.org_info ?? {},
   }));
@@ -73,6 +78,17 @@ export async function persistOrgInfo(grantId: string, orgInfo: Record<string, Or
   const { error } = await supabase
     .from('applications')
     .update({ org_info: orgInfo, updated_at: new Date().toISOString() })
+    .eq('grant_id', grantId);
+  if (error) throw error;
+}
+
+export async function persistChecklistState(
+  grantId: string,
+  checklistState: Record<string, ChecklistItemState>,
+): Promise<void> {
+  const { error } = await supabase
+    .from('applications')
+    .update({ checklist_state: checklistState, updated_at: new Date().toISOString() })
     .eq('grant_id', grantId);
   if (error) throw error;
 }

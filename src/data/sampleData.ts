@@ -1,3 +1,5 @@
+import type { ChecklistItemState } from './checklistItems';
+
 export type OpportunityStatus = 'new' | 'in_progress' | 'submitted' | 'awarded' | 'not_awarded' | 'draft';
 
 export const STATUS_META: Record<OpportunityStatus, { dotClass: string; label: string }> = {
@@ -56,6 +58,10 @@ export interface Application {
    * those pages triggering their own AI assessment call. Null until assessed once. */
   alignmentScore: number | null;
   alignmentComputedAt: string | null;
+  /** Per-application checked-state for the pre-submission requirements checklist —
+   * which items apply to THIS grant is computed deterministically from opportunity
+   * facts (see getChecklistItems in checklistItems.ts), this only stores completion. */
+  checklistState: Record<string, ChecklistItemState>;
   deadline: string;
   /** A one-time snapshot of SF-424 org fields taken from Business DNA when the
    * application was started — edited independently per application from then on,
