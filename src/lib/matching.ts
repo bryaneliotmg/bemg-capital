@@ -137,7 +137,19 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   // alone rather than by checking codes that will always be empty.
   const isGrantsGov = opp.source === 'grants_gov';
   const isOpen = OPEN_STATUSES.has(status);
-  const hasBusinessEligibility = isGrantsGov ? codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c)) : true;
+  // A freshly-synced Grants.gov "shell" row (see syncOpportunityShells() in
+  // grantsSync.ts) has no eligibility_codes yet — detail hasn't been fetched. That's
+  // not the same as "not business-eligible": the search query that found this row in
+  // the first place was already filtered to the business-eligible codes (22|23|25|99),
+  // so Grants.gov itself already confirmed eligibility — we just don't have the exact
+  // code breakdown to display yet. Treating an empty list as ineligible here would
+  // silently hide every not-yet-enriched grant from matches until its detail-fetch
+  // pass runs, days later. description is null only for these not-yet-enriched rows
+  // (every other source, and every enriched Grants.gov row, always sets it).
+  const isPendingEnrichment = isGrantsGov && opp.description === null;
+  const hasBusinessEligibility = isGrantsGov
+    ? isPendingEnrichment || codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c))
+    : true;
 
   if (!isOpen || !hasBusinessEligibility) {
     return { eligible: false, matchPct: 0, reasons: [], caveats: [] };

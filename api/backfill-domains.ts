@@ -32,10 +32,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // before picking which handful gets today's limited AI calls. Without this, the
   // backlog would clear in whatever order it happened to be inserted — no reason
   // that order would line up with what tenants are actually looking at right now.
+  //
+  // description IS NOT NULL excludes freshly-synced Grants.gov "shell" rows (see
+  // syncOpportunityShells() in grantsSync.ts) that only have a title so far, not real
+  // content yet — classifying those now would waste a precious daily Gemini call on
+  // title-only text and then never revisit it once enrichOpportunityDetails() fills in
+  // the actual description days later. Only grants_gov rows can have a null
+  // description (every other source sets it at insert time), so this doesn't affect them.
   const { data: candidateRows, error } = await supabase
     .from('funding_opportunities')
     .select('id')
     .or('primary_domain.is.null,eligible_states.is.null')
+    .not('description', 'is', null)
     .limit(500);
   if (error) {
     res.status(500).json({ error: error.message });
@@ -50,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { count: remaining } = await supabase
     .from('funding_opportunities')
     .select('id', { count: 'exact', head: true })
-    .or('primary_domain.is.null,eligible_states.is.null');
+    .or('primary_domain.is.null,eligible_states.is.null')
+    .not('description', 'is', null);
 
   res.status(200).json({ ok: true, attempted: ids.length, ...result, remaining });
 }

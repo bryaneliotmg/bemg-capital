@@ -67,6 +67,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(400).json({ error: '"grants_gov" is reserved for the automated Grants.gov sync' });
     return;
   }
+  // GrantWatch's own listings require a paid GrantWatch subscription to actually view
+  // full details or apply — a tenant matched to one here has no way to act on it
+  // without paying a third party we have no relationship with. Blocked at import time
+  // rather than just discouraged, after 28 previously-imported grantwatch grants were
+  // removed for exactly this reason.
+  if (body.source === 'grantwatch') {
+    res.status(400).json({
+      error: 'GrantWatch listings require a paid GrantWatch subscription to view or apply — not importable here.',
+    });
+    return;
+  }
 
   const supabase = createClient(supabaseUrl, serviceKey);
   let imported = 0;

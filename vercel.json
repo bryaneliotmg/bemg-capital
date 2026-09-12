@@ -11,7 +11,8 @@
     "api/assess-alignment.ts": { "maxDuration": 60 },
     "api/import-grants.ts": { "maxDuration": 60 },
     "api/classify-tenant.ts": { "maxDuration": 30 },
-    "api/backfill-domains.ts": { "maxDuration": 60 }
+    "api/backfill-domains.ts": { "maxDuration": 60 },
+    "api/backfill-opportunity-details.ts": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/cron/sync-grants", "schedule": "0 6 * * *" },

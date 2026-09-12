@@ -153,6 +153,8 @@ ${sectionsBlock}`;
 export function buildGrantExtractionPrompt(): string {
   return `I'm looking at a webpage that lists grants or funding programs for small businesses. Extract ONLY the individual grant/funding listings you can actually see on this page — skip anything that isn't a grant (e.g. blog posts, generic offers/discounts, webinars/events, navigation links) unless it's clearly a funding program.
 
+IMPORTANT: if actually viewing full details or applying to these grants requires a PAID subscription to this website (e.g. a database like GrantWatch, Instrumentl, or Candid) rather than being free once you find it, stop and return "grants": [] — don't extract anything. These listings would be dead ends for someone without that paid account, so they shouldn't be imported.
+
 For each grant, extract:
 - "title": the grant's name, exactly as written
 - "description": its description, verbatim (or a faithful summary if very long)

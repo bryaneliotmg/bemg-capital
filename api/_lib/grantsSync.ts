@@ -31,6 +31,19 @@ export interface SyncResult {
   syncedIds: string[];
 }
 
+export interface ShellSyncResult {
+  totalHits: number;
+  upserted: number;
+}
+
+export interface EnrichResult {
+  attempted: number;
+  enriched: number;
+  errorCount: number;
+  errors: string[];
+  remaining: number;
+}
+
 function mmddyyyyToIso(value: string | undefined | null): string | null {
   if (!value) return null;
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
@@ -163,4 +176,161 @@ export async function syncGrants(opts: { keyword?: string; rows?: number }): Pro
     errors: errors.slice(0, 10),
     syncedIds,
   };
+}
+
+// Real gap this fixes: syncGrants() above fetches full per-opportunity detail (a
+// separate network call per hit) for whatever it's given, so it was only ever called
+// with a small `rows` value (25/day via the cron, 20 per user search) to stay inside a
+// serverless function's time budget. But Grants.gov's own business-eligibility filter
+// (22|23|25|99) currently matches ~1,430 open/forecasted opportunities — a user
+// searching Grants.gov directly found real, relevant hits this app had never synced at
+// all, because the daily cron was only ever seeing the top 25 of 1,430.
+//
+// The search2 endpoint itself, with no per-hit detail fetch, comfortably returns up to
+// 1,000 rows in one call and supports startRecordNum for paging past that — so the fix
+// is to sync the FULL current catalog's lightweight search-hit fields (title, agency,
+// dates, status) in one fast pass, then let enrichOpportunityDetails() below fill in
+// the heavier fields (description, award amounts, eligibility codes) for a bounded
+// batch per run, same trickle shape already used for AI domain classification.
+//
+// The upsert here deliberately omits description/award_floor/award_ceiling/
+// eligibility_codes/etc. entirely (not even as null) — Postgres's ON CONFLICT DO
+// UPDATE only touches columns actually present in the payload, so a row that already
+// has real detail from a prior enrichment pass keeps it untouched; a brand-new row
+// just gets NULL for whatever wasn't provided, same as before enrichment ever ran.
+export async function syncOpportunityShells(): Promise<ShellSyncResult> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars');
+  }
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  let totalHits = 0;
+  let upserted = 0;
+  let startRecordNum = 0;
+  const PAGE_SIZE = 1000;
+  const MAX_PAGES = 6; // safety cap — 6,000 rows is well past today's ~1,430, room to grow
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const searchRes = await fetch(SEARCH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rows: PAGE_SIZE,
+        startRecordNum,
+        oppStatuses: 'forecasted|posted',
+        eligibilities: BUSINESS_ELIGIBILITY_FILTER,
+        keyword: '',
+      }),
+    });
+    const searchJson = await searchRes.json();
+    const hits: SearchHit[] = searchJson?.data?.oppHits ?? [];
+    totalHits = searchJson?.data?.hitCount ?? totalHits;
+    if (hits.length === 0) break;
+
+    const rows = hits.map((hit) => ({
+      id: String(hit.id),
+      opportunity_number: hit.number,
+      title: hit.title,
+      agency_name: hit.agency,
+      agency_code: hit.agencyCode,
+      cfda_list: hit.cfdaList ?? [],
+      doc_type: hit.docType,
+      status: hit.oppStatus,
+      open_date: mmddyyyyToIso(hit.openDate),
+      close_date: mmddyyyyToIso(hit.closeDate),
+      source: 'grants_gov',
+      synced_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('funding_opportunities').upsert(rows);
+    if (error) throw error;
+    upserted += rows.length;
+
+    startRecordNum += PAGE_SIZE;
+    if (startRecordNum >= totalHits) break;
+  }
+
+  return { totalHits, upserted };
+}
+
+// Bounded trickle that fills in the heavier fields (description, award amounts,
+// eligibility codes, etc.) for whatever syncOpportunityShells() above has synced but
+// hasn't been detail-fetched yet — "needs detail" is simply description IS NULL,
+// since a shell row never sets it and a fully-enriched row always does. Sequential,
+// not batched: Grants.gov's detail endpoint has no documented rate limit (unlike the
+// Gemini quota this app already had to work around), and at ~250-300ms per call, a
+// batch of 100 fits comfortably inside a 60s function with real margin to spare.
+export async function enrichOpportunityDetails(limit = 100): Promise<EnrichResult> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars');
+  }
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const { data: shells, error: selectError } = await supabase
+    .from('funding_opportunities')
+    .select('id')
+    .eq('source', 'grants_gov')
+    .is('description', null)
+    .limit(limit);
+  if (selectError) throw selectError;
+
+  const errors: string[] = [];
+  let enriched = 0;
+
+  for (const shell of shells ?? []) {
+    try {
+      const detailRes = await fetch(DETAIL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opportunityId: Number(shell.id) }),
+      });
+      const detailJson = await detailRes.json();
+      const detail = detailJson?.data ?? {};
+      const detailSource = detail.synopsis ?? detail.forecast ?? {};
+      const description: string = detailSource.synopsisDesc ?? detailSource.forecastDesc ?? '';
+      const eligibilityCodes: string[] = Array.isArray(detailSource.applicantTypes)
+        ? detailSource.applicantTypes
+            .map((a: unknown) => (typeof a === 'string' ? a : String((a as { id?: string })?.id ?? '')))
+            .filter((code: string) => code.length > 0)
+        : [];
+      const fundingCategories = Array.isArray(detailSource.fundingActivityCategories)
+        ? detailSource.fundingActivityCategories
+        : [];
+
+      const { error: updateError } = await supabase
+        .from('funding_opportunities')
+        .update({
+          award_floor: parseAward(detailSource.awardFloor),
+          award_ceiling: parseAward(detailSource.awardCeiling),
+          eligibility_codes: eligibilityCodes,
+          funding_categories: fundingCategories,
+          // A description can genuinely be an empty string from Grants.gov itself
+          // (rare, but seen) — fall back to a single space rather than '' so this row
+          // never matches `.is('description', null)` again and gets endlessly retried.
+          description: description || ' ',
+          announcement_url: detailSource.fundingDescLinkUrl ?? null,
+          applicant_eligibility_desc: detailSource.applicantEligibilityDesc ?? null,
+          agency_contact_name: detailSource.agencyContactName ?? null,
+          agency_contact_email: detailSource.agencyContactEmail ?? null,
+          agency_contact_phone: detailSource.agencyContactPhone ?? null,
+          raw_detail: detail,
+        })
+        .eq('id', shell.id);
+      if (updateError) throw updateError;
+      enriched++;
+    } catch (err) {
+      errors.push(`${shell.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const { count: remaining } = await supabase
+    .from('funding_opportunities')
+    .select('id', { count: 'exact', head: true })
+    .eq('source', 'grants_gov')
+    .is('description', null);
+
+  return { attempted: shells?.length ?? 0, enriched, errorCount: errors.length, errors: errors.slice(0, 10), remaining: remaining ?? 0 };
 }
