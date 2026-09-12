@@ -38,7 +38,7 @@ export function Sidebar() {
 
       {isAdmin && availableTenants.length > 0 && (
         <div className="px-1.5 pb-5">
-          <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active/45 mb-1.5">
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active mb-1.5">
             Acting as
           </div>
           <select
@@ -55,7 +55,7 @@ export function Sidebar() {
         </div>
       )}
 
-      <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active/45 px-2.5 pt-2 pb-1.5">
+      <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active px-2.5 pt-2 pb-1.5">
         Capital
       </div>
       <NavLink to="/dashboard" className={navItemClass}>
@@ -75,7 +75,7 @@ export function Sidebar() {
         Applications
       </NavLink>
 
-      <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active/45 px-2.5 pt-5 pb-1.5">
+      <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active px-2.5 pt-5 pb-1.5">
         Roadmap
       </div>
       <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-sidebar-text text-[13px] font-semibold">
