@@ -183,20 +183,18 @@ export async function classifyTenantDomain(profileText: string): Promise<DomainC
  * upsert that omits primary_domain/topic_tags leaves an existing classification
  * untouched, so re-syncing the same grant tomorrow doesn't reclassify it today's work).
  *
- * Strictly sequential with a fixed pause between calls, not concurrent — the Gemini key
- * on this project is free-tier, hard-limited to 5 requests/minute for gemini-2.5-flash
- * (found via a real backfill run that failed on 47/50 items with RESOURCE_EXHAUSTED).
- * That's a per-project ceiling, not a per-worker one, so running several calls at once
- * just fails most of them instead of actually finishing faster — pacing every call
- * ~13s apart (60s / 5 + a small margin) stays under the limit instead of hitting it and
- * retrying. This means a serverless function's ~60s budget only fits ~4 classifications
- * per invocation; any individual failure is swallowed so it doesn't fail the whole
- * sync — it just stays unclassified until the next sync or backfill call picks it up.
- *
- * There's also a separate, much lower ceiling underneath the per-minute one: only 20
- * requests total PER DAY on this free-tier key. Once that's hit, every remaining item
- * in this batch would fail the same way, so the loop stops at the first daily-quota
- * error instead of working through (and re-erroring on) the rest of the list.
+ * Strictly sequential, not concurrent — running several calls at once against the same
+ * per-project quota just fails most of them instead of finishing faster. Originally
+ * this also added a blind 13s sleep between every call to stay under the free tier's
+ * 5 req/min ceiling — since billing was enabled on this project's Gemini key, that
+ * ceiling (and the 20/day one under it) no longer applies, so the fixed pause was
+ * removed. withRetry() (above) already reacts to an actual 429 by waiting out
+ * whatever delay the API itself suggests before retrying — that reactive handling is
+ * what keeps this safe if a lower-tier limit is ever hit again (say, this project's
+ * billing lapses, or a different key is swapped in), without needing to permanently
+ * pay a 13s-per-item tax that a paid key no longer needs. isDailyQuotaExhausted()
+ * below still exists for the same reason: it costs nothing when it never fires, and
+ * still protects a single invocation's time budget if a daily-style cap ever recurs.
  */
 export async function classifyUnclassifiedOpportunities(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -234,9 +232,6 @@ export async function classifyUnclassifiedOpportunities(
       // The day's quota is gone for every remaining item too — stop now rather than
       // spend the rest of this invocation's time budget failing the same way repeatedly.
       if (isDailyQuotaExhausted(message)) break;
-    }
-    if (i < unclassified.length - 1) {
-      await new Promise((r) => setTimeout(r, 13000));
     }
   }
 

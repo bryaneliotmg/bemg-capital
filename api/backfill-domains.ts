@@ -5,11 +5,9 @@ import { rankByTenantRelevance } from './_lib/relevanceRanking.js';
 
 // Backfill for opportunities synced before domain classification existed (going
 // forward, every sync source classifies new rows itself — see grantsSync.ts,
-// sbaGov.ts, import-grants.ts). Runs daily via vercel.json's cron entry, trickling
-// through the historical backlog a few items at a time — the free-tier Gemini key
-// caps out at 20 classifications/day total, so this can't just run once and finish;
-// it's also safe to call manually any time (e.g. ?limit=N) since each call only pulls
-// whatever's still unclassified.
+// sbaGov.ts, import-grants.ts). Runs daily via vercel.json's cron entry; also safe to
+// call manually any time (e.g. ?limit=N) since each call only pulls whatever's still
+// unclassified.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -18,13 +16,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // 4 and 3 both timed out before the real cause was found: withRetry was waiting out
-  // the API's suggested ~60s retryDelay on a daily-quota 429 (not the per-minute one),
-  // which alone exceeds this function's 60s ceiling. Now that classifyUnclassifiedOpportunities
-  // fails fast on a daily-quota error instead of waiting on it, 4 is safe again — each
-  // successful call is paced 13s apart (per-minute quota) and a daily-quota exhaustion
-  // mid-batch stops the loop immediately rather than stacking a 60s wait.
-  const limit = req.query.limit ? Number(req.query.limit) : 4;
+  // Was capped at 4 for the free-tier key's 13s-per-item pacing (~4 fit in a 60s
+  // function). Billing is now enabled on this key, and classifyUnclassifiedOpportunities
+  // no longer adds an artificial pause between calls (see its comment in
+  // domainTaxonomy.ts) — real per-call latency is the only remaining constraint, so 25
+  // fits comfortably inside the 60s ceiling with margin. Override with ?limit= for a
+  // larger one-off catch-up run if needed.
+  const limit = req.query.limit ? Number(req.query.limit) : 25;
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Pull the whole outstanding pool (bounded generously — the current backlog is
