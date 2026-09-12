@@ -5,13 +5,13 @@ import { useAuth } from '../context/AuthContext';
 
 const navItemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold mb-0.5 transition-colors text-sidebar-text hover:bg-sidebar-hover',
-    // Was bg-sidebar-active/text-sidebar-text-active — a dark, low-saturation
-    // blue-on-blue combo that read as muddy despite the raw lightness gap looking
-    // fine on paper (likely an oklch gamut-clipping quirk at that low a chroma).
-    // Solid accent + white text is unambiguous and already proven readable
-    // everywhere else this exact color is used (buttons, links, icons).
-    isActive && 'bg-accent text-white',
+    'flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold mb-0.5 transition-colors',
+    // Deliberately mutually exclusive branches, not a shared base + conditional
+    // override — tailwind-merge doesn't know about custom @theme colors like
+    // sidebar-text, so it can't tell text-sidebar-text and text-white conflict and
+    // keeps both, leaving plain CSS source order (not intent) to decide which one
+    // actually renders. That was invisible text/icons on the active (blue) item.
+    isActive ? 'bg-accent text-white' : 'text-sidebar-text-active hover:bg-sidebar-hover',
   );
 
 export function Sidebar() {
@@ -32,7 +32,7 @@ export function Sidebar() {
           <div className="font-serif font-semibold text-base tracking-tight text-sidebar-text-active">
             bEMG Capital
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-wide text-sidebar-text">Demo workspace</div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-sidebar-text-active">Demo workspace</div>
         </div>
       </div>
 
@@ -78,14 +78,14 @@ export function Sidebar() {
       <div className="text-[10px] font-extrabold uppercase tracking-widest text-sidebar-text-active px-2.5 pt-5 pb-1.5">
         Roadmap
       </div>
-      <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-sidebar-text text-[13px] font-semibold">
+      <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-sidebar-text-active text-[13px] font-semibold">
         <Lock className="w-4 h-4" />
         Loans
         <span className="ml-auto text-[9px] font-extrabold uppercase tracking-wide bg-sidebar-hover px-[7px] py-0.5 rounded-full">
           Soon
         </span>
       </div>
-      <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-sidebar-text text-[13px] font-semibold">
+      <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-sidebar-text-active text-[13px] font-semibold">
         <Lock className="w-4 h-4" />
         Investors
         <span className="ml-auto text-[9px] font-extrabold uppercase tracking-wide bg-sidebar-hover px-[7px] py-0.5 rounded-full">
@@ -101,10 +101,10 @@ export function Sidebar() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-[12.5px] font-bold truncate text-sidebar-text-active">{email || 'bEMG Business'}</div>
-          <div className="text-[10.5px] text-sidebar-text font-semibold">Funding OS plan</div>
+          <div className="text-[10.5px] text-sidebar-text-active font-semibold">Funding OS plan</div>
         </div>
         <button
-          className="text-sidebar-text hover:text-sidebar-text-active shrink-0"
+          className="text-sidebar-text-active shrink-0"
           onClick={() => void signOut()}
           title="Sign out"
         >
