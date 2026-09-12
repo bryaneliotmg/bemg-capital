@@ -9,13 +9,7 @@ import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { useAuth } from '../context/AuthContext';
 import { buildOrgInfoSnapshot } from '../data/applicationFields';
 import { STRONG_MATCH_THRESHOLD } from '../lib/matching';
-
-const compactCurrency = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
+import { compactCurrency } from '../lib/format';
 
 export function Dashboard() {
   const navigate = useNavigate();

@@ -6,9 +6,10 @@ import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { useAuth } from '../context/AuthContext';
-import { ELIGIBILITY_LABELS } from '../lib/matching';
+import { ELIGIBILITY_LABELS, STRONG_MATCH_THRESHOLD } from '../lib/matching';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, buildOrgInfoSnapshot } from '../data/applicationFields';
 import { buildGrantExtractionPrompt } from '../lib/prompts';
+import { compactCurrency } from '../lib/format';
 
 const BUSINESS_CODES = new Set(['22', '23', '25', '99']);
 
@@ -74,6 +75,14 @@ export function GrantMatches() {
     : categoryFiltered;
 
   const selected = visibleOpportunities.find((g) => g.id === selectedId) ?? null;
+
+  // Same "strong match" definition and award-summing logic as the Dashboard's Funding
+  // Identified card (see STRONG_MATCH_THRESHOLD's comment in matching.ts) — summing
+  // every technically-eligible match would overstate what's realistically winnable.
+  // Scoped to whatever's currently visible (search/category filters applied), not the
+  // full unfiltered list, so the number stays accurate to what's actually on screen.
+  const strongVisibleMatches = visibleOpportunities.filter((o) => o.matchPct >= STRONG_MATCH_THRESHOLD);
+  const totalIdentified = strongVisibleMatches.reduce((sum, o) => sum + (o.awardAmount ?? 0), 0);
 
   const applicationFields = SF424_FIELD_MAP.map((mapping) => {
     const field = getField(mapping.dnaTab, mapping.dnaLabel);
@@ -215,6 +224,17 @@ export function GrantMatches() {
                 {cat.description} · {cat.count}
               </button>
             ))}
+          </div>
+        )}
+        {!loading && (
+          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-full border border-line-2 bg-surface-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-wide text-ink-3">Funding Identified</span>
+            <span className="text-[13px] font-bold text-accent">
+              {totalIdentified > 0 ? compactCurrency.format(totalIdentified) : 'N/A'}
+            </span>
+            <span className="text-[11px] text-ink-3">
+              across {strongVisibleMatches.length} strong match{strongVisibleMatches.length === 1 ? '' : 'es'}
+            </span>
           </div>
         )}
       </div>
