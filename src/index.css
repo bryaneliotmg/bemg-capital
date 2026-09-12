@@ -35,12 +35,23 @@ body {
   font-size: 14px;
 }
 
-a {
-  color: var(--color-accent);
-  text-decoration: none;
-}
-a:hover {
-  opacity: 0.8;
+/* @layer base, not plain unlayered CSS — this is the actual root cause of a whole
+   round of sidebar nav text appearing to ignore every text-color utility we tried
+   (text-sidebar-text, text-sidebar-text-active, text-white in turn): per the CSS
+   Cascade Layers spec, UNLAYERED styles always beat LAYERED styles regardless of
+   specificity. Tailwind's own utility classes live inside its own generated layers
+   (e.g. "utilities"), so a plain top-level `a { color: ... }` rule like this one was
+   unconditionally winning over every `text-*` class ever applied to an <a>/NavLink,
+   no matter how specific or how "correct" the class. Wrapping it in @layer base lets
+   Tailwind's utility layer (which comes after base) win exactly as expected. */
+@layer base {
+  a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  a:hover {
+    opacity: 0.8;
+  }
 }
 
 @layer components {
