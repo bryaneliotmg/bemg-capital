@@ -6,7 +6,12 @@ import { useAuth } from '../context/AuthContext';
 const navItemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
     'flex items-center gap-3 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold mb-0.5 transition-colors text-sidebar-text hover:bg-sidebar-hover',
-    isActive && 'bg-sidebar-active text-sidebar-text-active',
+    // Was bg-sidebar-active/text-sidebar-text-active — a dark, low-saturation
+    // blue-on-blue combo that read as muddy despite the raw lightness gap looking
+    // fine on paper (likely an oklch gamut-clipping quirk at that low a chroma).
+    // Solid accent + white text is unambiguous and already proven readable
+    // everywhere else this exact color is used (buttons, links, icons).
+    isActive && 'bg-accent text-white',
   );
 
 export function Sidebar() {
