@@ -24,10 +24,17 @@ function slugify(title: string): string {
     .replace(/(^-|-$)/g, '');
 }
 
+// Real bug this surfaced: "Up to $5,000 / Up to $10,000" naively stripped to
+// non-digits concatenated into "500010000" ($500M!) — stripping punctuation from the
+// whole string collapses multiple distinct numbers into one garbage one. Extract each
+// number separately instead, and take the largest as the ceiling (the natural reading
+// of "up to $X / up to $Y" or "$X - $Y" for an award_ceiling field).
 function parseAmount(amount: string | null): number | null {
   if (!amount) return null;
-  const num = Number(amount.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(num) && num > 0 ? num : null;
+  const matches = amount.match(/[\d,]+(?:\.\d+)?/g);
+  if (!matches) return null;
+  const values = matches.map((m) => Number(m.replace(/,/g, ''))).filter((n) => Number.isFinite(n) && n > 0);
+  return values.length > 0 ? Math.max(...values) : null;
 }
 
 // Manual counterpart to api/cron/sync-grants.ts, for sources that can't be synced
@@ -106,7 +113,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  await classifyUnclassifiedOpportunities(supabase, importedIds);
+  // Capped to 4 — a paste of more than a handful of grants (this is exactly what
+  // happened: a 14-grant paste) would otherwise try to classify all of them in this
+  // same request at ~13s apart, blowing past the function's 60s ceiling. The import
+  // above already committed by this point regardless, so an uncapped call here doesn't
+  // lose data — it just kills the response before the client ever sees the success
+  // message, making a real import look like a failure. Anything past the first 4 is
+  // picked up by the next daily backfill-domains run.
+  await classifyUnclassifiedOpportunities(supabase, importedIds.slice(0, 4));
 
   res.status(200).json({ ok: true, imported, errorCount: errors.length, errors: errors.slice(0, 10) });
 }

@@ -187,7 +187,11 @@ export async function syncSbaGov(): Promise<SbaSyncResult> {
     }
   }
 
-  await classifyUnclassifiedOpportunities(supabase, syncedIds);
+  // Capped to 4 — see the matching comment in grantsSync.ts for why classifying an
+  // unbounded batch in this same request risks silently timing out the function
+  // despite the sync itself succeeding. Anything past the first 4 is picked up by the
+  // next daily backfill-domains run.
+  await classifyUnclassifiedOpportunities(supabase, syncedIds.slice(0, 4));
 
   return { found: programs.length, synced, errorCount: errors.length, errors: errors.slice(0, 10) };
 }

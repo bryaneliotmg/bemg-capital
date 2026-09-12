@@ -145,8 +145,15 @@ export async function syncGrants(opts: { keyword?: string; rows?: number }): Pro
 
   // Classify only whatever's newly synced (or was somehow never classified) — a grant
   // already classified from a prior sync keeps its stored domain untouched, since this
-  // is a one-time-per-grant AI call, not something re-run on every daily sync.
-  await classifyUnclassifiedOpportunities(supabase, syncedIds);
+  // is a one-time-per-grant AI call, not something re-run on every daily sync. Capped
+  // to 4 here, same as api/backfill-domains.ts's default: each classification is
+  // paced ~13s apart to respect Gemini's per-minute quota, so classifying an unbounded
+  // number of newly-synced grants in this same request risks blowing the function's
+  // 60s ceiling on any sync that pulls in more than a handful — the sync itself (and
+  // the data it already wrote) would still succeed, but the response would never make
+  // it back, making a real success look like a failure. Anything past the first 4
+  // gets picked up by the next daily backfill-domains run instead.
+  await classifyUnclassifiedOpportunities(supabase, syncedIds.slice(0, 4));
 
   return {
     totalHits: searchJson?.data?.hitCount ?? 0,
