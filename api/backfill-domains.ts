@@ -5,7 +5,9 @@ import { rankByTenantRelevance } from './_lib/relevanceRanking.js';
 
 // Backfill for opportunities synced before domain classification existed (going
 // forward, every sync source classifies new rows itself — see grantsSync.ts,
-// sbaGov.ts, import-grants.ts). Runs daily via vercel.json's cron entry; also safe to
+// sbaGov.ts, import-grants.ts). Runs once daily via vercel.json's cron entry — Vercel's
+// Hobby plan (this project's tier) only allows a cron to run once/day, so spreading
+// this across several smaller runs isn't available without upgrading. Also safe to
 // call manually any time (e.g. ?limit=N) since each call only pulls whatever's still
 // unclassified.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -16,13 +18,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Was capped at 4 for the free-tier key's 13s-per-item pacing (~4 fit in a 60s
-  // function). Billing is now enabled on this key, and classifyUnclassifiedOpportunities
-  // no longer adds an artificial pause between calls (see its comment in
-  // domainTaxonomy.ts) — real per-call latency is the only remaining constraint, so 25
-  // fits comfortably inside the 60s ceiling with margin. Override with ?limit= for a
-  // larger one-off catch-up run if needed.
-  const limit = req.query.limit ? Number(req.query.limit) : 25;
+  // A prior key got suspended (CONSUMER_SUSPENDED) after a burst of ~25 requests fired
+  // back-to-back with no pacing, right when billing was first linked — a classic
+  // fraud-detection trigger on a brand-new billing account. Since Hobby's once/day
+  // cron limit means this can't be spread across multiple smaller daily runs, the
+  // actual safety fix is classifyUnclassifiedOpportunities()'s 1s pacing between calls
+  // (see its comment) — a 30-item run now takes at least ~30s of steady, evenly-spaced
+  // requests instead of an instant spike. 30 is a deliberate, modest step up from the
+  // old free-tier 20/day ceiling, not a dramatic jump, while that pacing is still new.
+  const limit = req.query.limit ? Number(req.query.limit) : 30;
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Pull the whole outstanding pool (bounded generously — the current backlog is

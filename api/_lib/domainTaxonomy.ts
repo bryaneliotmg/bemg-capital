@@ -233,6 +233,16 @@ export async function classifyUnclassifiedOpportunities(
       // spend the rest of this invocation's time budget failing the same way repeatedly.
       if (isDailyQuotaExhausted(message)) break;
     }
+    // A small, deliberate gap — not a quota necessity (withRetry already reacts to an
+    // actual 429), but a smoother, more human-paced request cadence than firing calls
+    // back-to-back. A prior key got suspended (CONSUMER_SUSPENDED) shortly after a
+    // sudden burst of rapid-fire requests right when billing was first linked — Google's
+    // fraud detection treats "brand-new billing account + immediate rapid usage" as a
+    // classic abuse signal. This costs a few seconds per invocation, which is cheap
+    // insurance against tripping that same review again on a fresh key.
+    if (i < unclassified.length - 1) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
   }
 
   return { classified, errorCount: errors.length, errors: errors.slice(0, 10) };
