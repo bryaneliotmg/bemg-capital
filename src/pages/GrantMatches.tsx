@@ -260,7 +260,12 @@ export function GrantMatches() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '1fr 420px' }}>
+        // The detail panel is where the actual work happens (evidence, eligibility,
+        // application fields) — it was capped at a fixed 420px while the list got
+        // every extra pixel, backwards for what this page is actually for. The list
+        // just needs enough width to be scannable, so it keeps a fixed width and the
+        // detail panel now takes whatever space is left instead of the reverse.
+        <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '420px 1fr' }}>
           <div className="flex flex-col gap-3.5 min-w-0">
             {visibleOpportunities.map((grant) => {
               const isSelected = selectedId === grant.id;
@@ -315,7 +320,7 @@ export function GrantMatches() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4 mb-5">
+                <div className="grid grid-cols-4 gap-4 mb-5">
                   <div>
                     <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Amount</div>
                     <div className="text-sm font-bold mt-1">{selected.amount}</div>
@@ -373,6 +378,10 @@ export function GrantMatches() {
 
                 <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2 mb-2.5">
                   Who's eligible
+                </div>
+                <div className="text-[11.5px] text-ink-3 mb-2.5">
+                  This is the full list of applicant types this grant accepts — you only need to match ONE
+                  of these, not all of them.
                 </div>
                 <div className="flex flex-col gap-1.5 mb-2">
                   {selected.eligibilityCodes.map((code) => (
