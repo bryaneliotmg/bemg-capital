@@ -287,11 +287,11 @@ export function GrantMatches() {
         </div>
       ) : (
         // The detail panel is where the actual work happens (evidence, eligibility,
-        // application fields) — it was capped at a fixed 420px while the list got
-        // every extra pixel, backwards for what this page is actually for. The list
-        // just needs enough width to be scannable, so it keeps a fixed width and the
-        // detail panel now takes whatever space is left instead of the reverse.
-        <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '420px 1fr' }}>
+        // application fields), so it keeps the flexible 1fr column and takes whatever
+        // space is left. The list column is fixed but was feeling cramped at 420px
+        // (titles/funder/amount truncating) — widened ~25% to 525px for more breathing
+        // room while the detail panel still gets the majority share on a typical screen.
+        <div className="grid gap-6 items-start min-w-0" style={{ gridTemplateColumns: '525px 1fr' }}>
           <div className="flex flex-col gap-3.5 min-w-0">
             {visibleOpportunities.map((grant) => {
               const isSelected = selectedId === grant.id;
