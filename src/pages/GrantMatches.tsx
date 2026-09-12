@@ -25,7 +25,7 @@ function formatExactDate(iso: string | null): string {
 
 export function GrantMatches() {
   const navigate = useNavigate();
-  const { hasApplication, startApplication } = useApplications();
+  const { hasApplication, startApplication, getApplication } = useApplications();
   const { opportunities, loading, error, search, searching, searchError, refresh } = useOpportunities();
   const { getField } = useBusinessDNA();
   const { isAdmin } = useAuth();
@@ -469,6 +469,22 @@ export function GrantMatches() {
                     <ExternalLink className="w-3.5 h-3.5" />
                     View the full official announcement on Grants.gov
                   </a>
+                )}
+                {hasApplication(selected.id) && (
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-2 mb-3.5">
+                    <span className="text-[12px] font-bold text-ink-2">Submission readiness</span>
+                    {(() => {
+                      const score = getApplication(selected.id)?.alignmentScore;
+                      return (
+                        <button
+                          className="text-[12.5px] font-bold text-accent"
+                          onClick={() => navigate(`/applications/${selected.id}`)}
+                        >
+                          {score != null ? `${score}% ready →` : 'Not yet assessed →'}
+                        </button>
+                      );
+                    })()}
+                  </div>
                 )}
                 <div className="bg-surface-2 rounded-xl p-4 mb-5">
                   <div className="flex items-center justify-between mb-3">

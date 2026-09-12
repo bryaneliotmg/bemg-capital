@@ -98,6 +98,21 @@ function alignmentRingColor(score: number): string {
   return '#8a8178';
 }
 
+// Pulled out of the component so both the render-time display and the persist-on-compute
+// call sites (handleAssessAlignment, handleStrengthenDraft) share one definition — the
+// score shown is always exactly the score saved, never two subtly different formulas.
+function computeAlignmentScore(
+  assessments: Record<string, AlignmentAssessment>,
+  orgFraction: number,
+  placeholderCount: number,
+): number | null {
+  const scores = Object.values(assessments);
+  if (scores.length === 0) return null;
+  const contentAvg = Math.round(scores.reduce((sum, a) => sum + a.score, 0) / scores.length);
+  const placeholderPenalty = Math.min(placeholderCount * 5, 30);
+  return Math.max(0, Math.min(100, Math.round(0.7 * contentAvg + 0.3 * orgFraction * 100) - placeholderPenalty));
+}
+
 function QuickEditField({
   label,
   value,
@@ -183,6 +198,7 @@ export function ApplicationDetail() {
   const {
     getApplication,
     setApplicationStatus,
+    recordAlignmentScore,
     updateOrgField,
     getNarrative,
     updateNarrative,
@@ -208,6 +224,7 @@ export function ApplicationDetail() {
   const [promptCopied, setPromptCopied] = useState(false);
   const [narrativePromptCopied, setNarrativePromptCopied] = useState(false);
   const [placeholderDrafts, setPlaceholderDrafts] = useState<Record<string, string>>({});
+  const [outcomeReasonDraft, setOutcomeReasonDraft] = useState('');
 
   const application = grantId ? getApplication(grantId) : undefined;
   const opportunity = opportunities.find((o) => o.id === grantId);
@@ -275,10 +292,7 @@ export function ApplicationDetail() {
       : null;
   const orgFraction = applicationFields.length ? orgReadyCount / applicationFields.length : 0;
   const placeholderPenalty = Math.min(placeholders.length * 5, 30);
-  const alignmentScore =
-    contentAvg != null
-      ? Math.max(0, Math.min(100, Math.round(0.7 * contentAvg + 0.3 * orgFraction * 100) - placeholderPenalty))
-      : null;
+  const alignmentScore = alignment ? computeAlignmentScore(alignment, orgFraction, placeholders.length) : null;
 
   async function callAssess(narrativeToAssess: Record<string, string>): Promise<Record<string, AlignmentAssessment>> {
     if (!opportunity) throw new Error('No opportunity loaded');
@@ -308,6 +322,8 @@ export function ApplicationDetail() {
       const result = await callAssess(narrative);
       setAlignment(result);
       setAssessedSnapshot(narrativeSnapshot);
+      const score = computeAlignmentScore(result, orgFraction, findPlaceholders(narrative, sections).length);
+      if (score != null && grantId) recordAlignmentScore(grantId, score);
     } catch (err) {
       setAssessError(err instanceof Error ? err.message : 'Assessment failed');
     } finally {
@@ -380,6 +396,15 @@ export function ApplicationDetail() {
           log.push(`Round ${round}: no measurable improvement — stopping early rather than spinning further.`);
           break;
         }
+      }
+
+      if (currentAlignment && grantId) {
+        const finalScore = computeAlignmentScore(
+          currentAlignment,
+          orgFraction,
+          findPlaceholders(workingNarrative, sections).length,
+        );
+        if (finalScore != null) recordAlignmentScore(grantId, finalScore);
       }
     } catch (err) {
       setStrengthenError(err instanceof Error ? err.message : 'Strengthen failed');
@@ -983,6 +1008,50 @@ export function ApplicationDetail() {
                     Save &amp; Come Back Later
                   </button>
                 </div>
+
+                {application.status !== 'draft' && application.status !== 'new' && (
+                  <div className="mt-6 pt-6 border-t border-line">
+                    <div className="text-[13px] font-bold mb-1.5">Record the Outcome</div>
+                    <div className="text-[11.5px] text-ink-2 mb-3.5">
+                      Once the funder responds, record it here — a real, growing record of what actually happened
+                      is worth more over time than any prediction this app could make beforehand.
+                    </div>
+                    {application.status === 'awarded' || application.status === 'not_awarded' ? (
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full inline-block ${STATUS_META[application.status].dotClass}`} />
+                        <span className="text-[12.5px] font-bold">{STATUS_META[application.status].label}</span>
+                        {application.outcomeReason && (
+                          <span className="text-[12px] text-ink-2">— {application.outcomeReason}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2.5">
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="glass-btn-outline"
+                            onClick={() => grantId && setApplicationStatus(grantId, 'awarded')}
+                          >
+                            Mark Awarded
+                          </button>
+                          <input
+                            value={outcomeReasonDraft}
+                            onChange={(e) => setOutcomeReasonDraft(e.target.value)}
+                            placeholder="Optional note (e.g. reviewer feedback)…"
+                            className="flex-1 min-w-0 bg-surface border border-line-2 rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-accent"
+                          />
+                          <button
+                            className="glass-btn-outline shrink-0"
+                            onClick={() =>
+                              grantId && setApplicationStatus(grantId, 'not_awarded', outcomeReasonDraft.trim() || null)
+                            }
+                          >
+                            Mark Not Awarded
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="glass-card p-7">

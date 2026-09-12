@@ -6,6 +6,9 @@ interface ApplicationRow {
   name: string;
   opportunity_type: string;
   status: string;
+  outcome_reason: string | null;
+  alignment_score: number | null;
+  alignment_computed_at: string | null;
   deadline: string;
   org_info: Record<string, OrgInfoField> | null;
 }
@@ -19,13 +22,16 @@ interface NarrativeRow {
 export async function fetchApplications(): Promise<Application[]> {
   const { data, error } = await supabase
     .from('applications')
-    .select('grant_id, name, opportunity_type, status, deadline, org_info');
+    .select('grant_id, name, opportunity_type, status, outcome_reason, alignment_score, alignment_computed_at, deadline, org_info');
   if (error) throw error;
   return (data ?? []).map((row: ApplicationRow) => ({
     grantId: row.grant_id,
     name: row.name,
     opportunityType: row.opportunity_type as OpportunityType,
     status: row.status as OpportunityStatus,
+    outcomeReason: row.outcome_reason,
+    alignmentScore: row.alignment_score,
+    alignmentComputedAt: row.alignment_computed_at,
     deadline: row.deadline,
     orgInfo: row.org_info ?? {},
   }));
@@ -44,10 +50,21 @@ export async function insertApplication(app: Application, tenantId: string): Pro
   if (error) throw error;
 }
 
-export async function persistApplicationStatus(grantId: string, status: OpportunityStatus): Promise<void> {
+export async function persistApplicationStatus(
+  grantId: string,
+  status: OpportunityStatus,
+  outcomeReason?: string | null,
+): Promise<void> {
+  const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+  if (outcomeReason !== undefined) update.outcome_reason = outcomeReason;
+  const { error } = await supabase.from('applications').update(update).eq('grant_id', grantId);
+  if (error) throw error;
+}
+
+export async function persistAlignmentScore(grantId: string, score: number): Promise<void> {
   const { error } = await supabase
     .from('applications')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ alignment_score: score, alignment_computed_at: new Date().toISOString() })
     .eq('grant_id', grantId);
   if (error) throw error;
 }

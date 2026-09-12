@@ -3,6 +3,12 @@ import { ChevronRight } from 'lucide-react';
 import { STATUS_META, OPPORTUNITY_TYPE_LABEL } from '../data/sampleData';
 import { useApplications } from '../context/ApplicationsContext';
 
+function alignmentBadgeColor(score: number): string {
+  if (score >= 80) return 'text-verified';
+  if (score >= 55) return 'text-inferred';
+  return 'text-required';
+}
+
 export function Applications() {
   const navigate = useNavigate();
   const { applications, loading } = useApplications();
@@ -24,11 +30,12 @@ export function Applications() {
     <div className="panel-enter glass-card py-2">
       <div
         className="grid gap-4 px-[26px] py-4 border-b border-line"
-        style={{ gridTemplateColumns: '1fr 120px 140px 120px 24px' }}
+        style={{ gridTemplateColumns: '1fr 120px 140px 110px 120px 24px' }}
       >
         <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">Opportunity</div>
         <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">Type</div>
         <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">Status</div>
+        <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">Readiness</div>
         <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">Deadline</div>
         <div />
       </div>
@@ -38,7 +45,7 @@ export function Applications() {
           <div
             key={app.grantId}
             className="grid gap-4 px-[26px] py-[18px] border-b border-line last:border-b-0 items-center cursor-pointer hover:bg-surface-2 transition-colors"
-            style={{ gridTemplateColumns: '1fr 120px 140px 120px 24px' }}
+            style={{ gridTemplateColumns: '1fr 120px 140px 110px 120px 24px' }}
             onClick={() => navigate(`/applications/${app.grantId}`)}
           >
             <div className="text-[13.5px] font-bold">{app.name}</div>
@@ -46,6 +53,9 @@ export function Applications() {
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full inline-block ${status.dotClass}`} />
               <span className="text-[11.5px] font-bold uppercase tracking-wide text-ink-2">{status.label}</span>
+            </div>
+            <div className={`text-[12.5px] font-bold ${app.alignmentScore != null ? alignmentBadgeColor(app.alignmentScore) : 'text-ink-3'}`}>
+              {app.alignmentScore != null ? `${app.alignmentScore}%` : 'Not assessed'}
             </div>
             <div className="text-[12.5px] text-ink-3">{app.deadline}</div>
             <ChevronRight className="w-4 h-4 text-ink-3" />

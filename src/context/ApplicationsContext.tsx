@@ -6,6 +6,7 @@ import {
   fetchApplications,
   fetchNarratives,
   insertApplication,
+  persistAlignmentScore,
   persistApplicationStatus,
   persistNarrativeBulk,
   persistNarrativeSection,
@@ -28,7 +29,8 @@ interface ApplicationsContextValue {
   hasApplication: (grantId: string) => boolean;
   startApplication: (opportunity: StartableOpportunity, orgInfo: Record<string, OrgInfoField>) => void;
   getApplication: (grantId: string) => Application | undefined;
-  setApplicationStatus: (grantId: string, status: OpportunityStatus) => void;
+  setApplicationStatus: (grantId: string, status: OpportunityStatus, outcomeReason?: string | null) => void;
+  recordAlignmentScore: (grantId: string, score: number) => void;
   updateOrgField: (grantId: string, dnaLabel: string, value: string) => void;
   getNarrative: (grantId: string) => Record<string, string>;
   updateNarrative: (grantId: string, sectionId: string, value: string) => void;
@@ -89,6 +91,9 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       name: opportunity.name,
       opportunityType: 'GRANT',
       status: 'draft',
+      outcomeReason: null,
+      alignmentScore: null,
+      alignmentComputedAt: null,
       deadline: opportunity.deadline,
       orgInfo,
     };
@@ -96,9 +101,19 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     runPersist(() => insertApplication(app, tenantId));
   };
 
-  const setApplicationStatus = (grantId: string, status: OpportunityStatus) => {
-    setApplications((prev) => prev.map((a) => (a.grantId === grantId ? { ...a, status } : a)));
-    runPersist(() => persistApplicationStatus(grantId, status));
+  const setApplicationStatus = (grantId: string, status: OpportunityStatus, outcomeReason?: string | null) => {
+    setApplications((prev) =>
+      prev.map((a) => (a.grantId === grantId ? { ...a, status, ...(outcomeReason !== undefined ? { outcomeReason } : {}) } : a)),
+    );
+    runPersist(() => persistApplicationStatus(grantId, status, outcomeReason));
+  };
+
+  const recordAlignmentScore = (grantId: string, score: number) => {
+    const computedAt = new Date().toISOString();
+    setApplications((prev) =>
+      prev.map((a) => (a.grantId === grantId ? { ...a, alignmentScore: score, alignmentComputedAt: computedAt } : a)),
+    );
+    runPersist(() => persistAlignmentScore(grantId, score));
   };
 
   const updateOrgField = (grantId: string, dnaLabel: string, value: string) => {
@@ -161,6 +176,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
         startApplication,
         getApplication,
         setApplicationStatus,
+        recordAlignmentScore,
         updateOrgField,
         getNarrative,
         updateNarrative,

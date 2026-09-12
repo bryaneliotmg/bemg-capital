@@ -1,10 +1,13 @@
-export type OpportunityStatus = 'new' | 'in_progress' | 'submitted' | 'awarded' | 'draft';
+export type OpportunityStatus = 'new' | 'in_progress' | 'submitted' | 'awarded' | 'not_awarded' | 'draft';
 
 export const STATUS_META: Record<OpportunityStatus, { dotClass: string; label: string }> = {
   new: { dotClass: 'bg-verified', label: 'New match' },
   in_progress: { dotClass: 'bg-inferred', label: 'In progress' },
   submitted: { dotClass: 'bg-ink-3', label: 'Submitted' },
   awarded: { dotClass: 'bg-verified', label: 'Awarded' },
+  // Named for the funder's decision specifically — "declined" is ambiguous (could read as
+  // the applicant declining an offered award instead).
+  not_awarded: { dotClass: 'bg-required', label: 'Not Awarded' },
   draft: { dotClass: 'bg-inferred', label: 'Draft' },
 };
 
@@ -45,6 +48,14 @@ export interface Application {
   name: string;
   opportunityType: OpportunityType;
   status: OpportunityStatus;
+  /** Free-text note on why a 'not_awarded' outcome happened — entered by the tenant,
+   * never inferred. Null until that status is set with a reason. */
+  outcomeReason: string | null;
+  /** The last "Alignment Score" computed on ApplicationDetail's Review tab, persisted
+   * so it can be shown on the Applications list / Grant Matches detail panel without
+   * those pages triggering their own AI assessment call. Null until assessed once. */
+  alignmentScore: number | null;
+  alignmentComputedAt: string | null;
   deadline: string;
   /** A one-time snapshot of SF-424 org fields taken from Business DNA when the
    * application was started — edited independently per application from then on,
