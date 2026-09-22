@@ -27,13 +27,14 @@ function formatExactDate(iso: string | null): string {
 export function GrantMatches() {
   const navigate = useNavigate();
   const { hasApplication, startApplication, getApplication } = useApplications();
-  const { opportunities, loading, error, search, searching, searchError, refresh } = useOpportunities();
+  const { opportunities, loading, error, search, searching, searchError, refresh, tenantProfile } = useOpportunities();
   const { getField } = useBusinessDNA();
   const { isAdmin } = useAuth();
   const { favoriteIds, isFavorited, toggleFavorite } = useFavorites();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeDomain, setActiveDomain] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -74,6 +75,29 @@ export function GrantMatches() {
     ? baseOpportunities.filter((o) => o.fundingCategories.some((c) => c.id === activeCategory))
     : baseOpportunities;
 
+  // Our own one-time AI-classified subject domain (api/_lib/domainTaxonomy.ts), as a
+  // manual filter — distinct from the category chips above, which are Grants.gov's own
+  // funding-activity labels. Surfaced as a chip (not applied automatically) so narrowing
+  // by domain is the user's explicit choice: an AI free-text search deliberately doesn't
+  // score/penalize by domain (see handleAiSearch below), because a single guessed bucket
+  // is too blunt a hard filter for an open-ended description — this chip row gives that
+  // same narrowing power back, transparently and reversibly, only over domains that
+  // actually appear in the current result set (never a filter down to zero).
+  const domains = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const opp of baseOpportunities) {
+      if (!opp.primaryDomain) continue;
+      counts.set(opp.primaryDomain, (counts.get(opp.primaryDomain) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [baseOpportunities]);
+
+  const domainFiltered = activeDomain
+    ? categoryFiltered.filter((o) => o.primaryDomain === activeDomain)
+    : categoryFiltered;
+
   // The search box previously only triggered a live Grants.gov fetch — typing "ohio"
   // added any newly-synced opportunities to the shared cache but never actually
   // narrowed what's displayed, so the list looked unchanged even when nothing matched.
@@ -82,12 +106,12 @@ export function GrantMatches() {
   // whether a live sync finds anything new.
   const searchTerm = searchInput.trim().toLowerCase();
   const searchFiltered = searchTerm
-    ? categoryFiltered.filter((o) =>
+    ? domainFiltered.filter((o) =>
         `${o.name} ${o.description} ${o.applicantEligibilityDesc ?? ''} ${o.funder}`
           .toLowerCase()
           .includes(searchTerm),
       )
-    : categoryFiltered;
+    : domainFiltered;
   const visibleOpportunities = showFavoritesOnly
     ? searchFiltered.filter((o) => isFavorited(o.id))
     : searchFiltered;
@@ -164,16 +188,34 @@ export function GrantMatches() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Search failed');
+      // Merge what the description says with what's already known about the business,
+      // rather than replacing it — the tenant's Business DNA-derived keywords are
+      // richer and more reliable than anything extractable from a couple of typed
+      // sentences, so this adds to that signal instead of throwing it away. Where the
+      // query states something explicit (an amount, a state), that takes precedence
+      // over the tenant's general-purpose figures, since it's more specific to this
+      // particular search; otherwise falls back to the tenant's own stated values.
+      //
+      // `domain` is deliberately left unset: matchOpportunity() (src/lib/matching.ts)
+      // treats a domain mismatch as a hard -30 penalty, which makes sense for the
+      // tenant's own established classification but actively buries good matches for
+      // an open-ended free-text ask that can legitimately span several domains at once
+      // (e.g. "apps for small businesses, minority businesses, or education" forced
+      // into one bucket). The `domains` filter chips above give the user that same
+      // narrowing power back manually and visibly, instead of the system silently
+      // deciding it for them.
+      const mergedKeywords = Array.from(new Set([...tenantProfile.keywords, ...(body.keywords ?? [])]));
       const profile: BusinessProfile = {
-        keywords: body.keywords ?? [],
-        domain: body.primaryDomain,
-        capitalRequirementMin: body.capitalRequirementMin ?? undefined,
-        state: body.state ?? undefined,
+        keywords: mergedKeywords,
+        capitalRequirementMin: body.capitalRequirementMin ?? tenantProfile.capitalRequirementMin,
+        state: body.state ?? tenantProfile.state,
       };
       const matched = await getMatchedOpportunities(profile);
       setAiResults(matched);
       setAiSummary({ domain: body.primaryDomain, keywords: body.keywords ?? [] });
       setSelectedId(null);
+      setActiveDomain(null);
+      setActiveCategory(null);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : 'Search failed — try rephrasing.');
     } finally {
@@ -186,6 +228,7 @@ export function GrantMatches() {
     setAiSummary(null);
     setAiQuery('');
     setAiError(null);
+    setActiveDomain(null);
   }
 
   return (
@@ -206,7 +249,7 @@ export function GrantMatches() {
               </span>
             </div>
           </div>
-          {(searchTerm || activeCategory || showFavoritesOnly) && (
+          {(searchTerm || activeCategory || activeDomain || showFavoritesOnly) && (
             <div className="text-[11px] text-ink-3 italic">Scoped to your current filter — clear it to see the full total</div>
           )}
         </div>
@@ -242,7 +285,8 @@ export function GrantMatches() {
             <span className="text-[11.5px] text-ink-3">
               {aiResults?.length ?? 0} match{aiResults?.length === 1 ? '' : 'es'} · read as{' '}
               <strong className="text-ink-2">{aiSummary.domain}</strong>
-              {aiSummary.keywords.length > 0 && ` · ${aiSummary.keywords.join(', ')}`}
+              {aiSummary.keywords.length > 0 && ` · ${aiSummary.keywords.join(', ')}`} — use the Focus area
+              chips below to narrow
             </span>
           )}
         </div>
@@ -350,6 +394,27 @@ export function GrantMatches() {
         )}
       </div>
 
+      {domains.length > 0 && (
+        <div className="flex items-center gap-2.5 flex-wrap mb-5">
+          <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-ink-3">Focus area</div>
+          {activeDomain && (
+            <button className="chip" onClick={() => setActiveDomain(null)}>
+              <X className="w-[11px] h-[11px]" />
+              Clear
+            </button>
+          )}
+          {domains.map((d) => (
+            <button
+              key={d.domain}
+              className={`chip ${activeDomain === d.domain ? 'active' : ''}`}
+              onClick={() => setActiveDomain(activeDomain === d.domain ? null : d.domain)}
+            >
+              {d.domain} · {d.count}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="glass-card p-10 flex items-center justify-center gap-2.5 text-ink-3">
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -369,7 +434,9 @@ export function GrantMatches() {
                 ? `Nothing currently loaded mentions "${searchInput.trim()}" — click Search to check Grants.gov live, or this term may just not exist as a federal grant category.`
                 : activeCategory
                   ? 'No matches in this category.'
-                  : 'No eligible opportunities synced yet.'}
+                  : activeDomain
+                    ? 'No matches in this focus area.'
+                    : 'No eligible opportunities synced yet.'}
           </div>
         </div>
       ) : (

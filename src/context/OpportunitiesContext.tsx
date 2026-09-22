@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { getMatchedOpportunities, searchGrants, type MatchedOpportunity } from '../lib/opportunities';
+import type { BusinessProfile } from '../lib/matching';
 import { deriveKeywordsFromDnaFields, buildProfileText } from '../lib/keywords';
 import { extractStateFromLocation } from '../lib/location';
 import { useBusinessDNA } from './BusinessDNAContext';
@@ -29,6 +30,11 @@ interface OpportunitiesContextValue {
   /** Re-fetch and re-score without a live Grants.gov search — used after a manual
    * grant import so the newly-added rows show up immediately. */
   refresh: () => Promise<void>;
+  /** The tenant's own already-computed match profile — the same keywords/domain/state/
+   * capital-need used to build `opportunities` above. Exposed so other search flows
+   * (e.g. the free-text AI search on the Grant Matches page) can build on top of what's
+   * already known about the business instead of starting from nothing. */
+  tenantProfile: BusinessProfile;
 }
 
 const OpportunitiesContext = createContext<OpportunitiesContextValue>({
@@ -39,6 +45,7 @@ const OpportunitiesContext = createContext<OpportunitiesContextValue>({
   searchError: null,
   search: async () => {},
   refresh: async () => {},
+  tenantProfile: { keywords: [] },
 });
 
 export function OpportunitiesProvider({ children }: { children: ReactNode }) {
@@ -133,8 +140,12 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
     [load],
   );
 
+  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState };
+
   return (
-    <OpportunitiesContext.Provider value={{ opportunities, loading, error, searching, searchError, search, refresh: load }}>
+    <OpportunitiesContext.Provider
+      value={{ opportunities, loading, error, searching, searchError, search, refresh: load, tenantProfile }}
+    >
       {children}
     </OpportunitiesContext.Provider>
   );
