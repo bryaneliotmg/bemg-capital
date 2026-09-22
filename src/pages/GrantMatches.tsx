@@ -690,6 +690,11 @@ export function GrantMatches() {
                     Pre-filled fields come straight from your Business DNA. Project-specific fields aren't
                     facts about the business, so they're always written fresh for this opportunity.
                   </div>
+                  <div className="text-[10.5px] text-ink-3 mt-2">
+                    Don't worry about having a polished thesis yet — once you start, we'll ask a few
+                    plain-language questions about your idea and turn them into what this program's
+                    reviewers expect.
+                  </div>
                 </div>
 
                 <button

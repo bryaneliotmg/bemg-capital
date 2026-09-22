@@ -28,15 +28,17 @@ import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { STATUS_META } from '../data/sampleData';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { getNarrativeSections, getRubricLabel } from '../data/narrativeSections';
+import { PROJECT_CONCEPT_SECTIONS } from '../data/projectConcept';
 import { getChecklistItems, type ChecklistItemStatus } from '../data/checklistItems';
 import { BUDGET_CATEGORIES, type BudgetCategoryId } from '../data/budgetCategories';
 import { buildOrgInfoPrompt, buildNarrativePrompt } from '../lib/prompts';
 import { extractKeywords } from '../lib/keywords';
 
-type Section = 'overview' | 'organization' | 'narrative' | 'budget' | 'review';
+type Section = 'overview' | 'concept' | 'organization' | 'narrative' | 'budget' | 'review';
 
 const SECTION_DEFS: { id: Section; label: string; desc: string }[] = [
   { id: 'overview', label: 'Overview', desc: 'What this grant needs' },
+  { id: 'concept', label: 'Your Idea', desc: 'A few plain-language questions' },
   { id: 'organization', label: 'Organization Info', desc: 'SF-424 fields, pre-filled' },
   { id: 'narrative', label: 'Project Narrative', desc: 'Guided, section by section' },
   { id: 'budget', label: 'Budget', desc: 'Line items by category' },
@@ -246,6 +248,9 @@ export function ApplicationDetail() {
   );
   const rubricLabel = getRubricLabel(opportunity?.agencyCode, opportunity?.name ?? '');
   const progress = grantId ? narrativeProgress(grantId, sections) : { done: 0, total: sections.length };
+  const conceptProgress = grantId
+    ? narrativeProgress(grantId, PROJECT_CONCEPT_SECTIONS)
+    : { done: 0, total: PROJECT_CONCEPT_SECTIONS.length };
   const checklistItems = useMemo(() => (opportunity ? getChecklistItems(opportunity) : []), [opportunity]);
   const budgetItems = grantId ? getBudgetItems(grantId) : [];
   const budgetTotal = budgetItems.reduce((sum, item) => sum + item.amount, 0);
@@ -460,6 +465,17 @@ export function ApplicationDetail() {
       .map((f) => ({ label: f.label, value: f.value, status: f.status }));
   }
 
+  // What the applicant actually said in the "Your Idea" tab, for THIS specific
+  // application — distinct from buildBusinessFacts() above, which only knows general
+  // facts about the business. Filtered to non-empty answers only; an applicant who
+  // skipped "Your Idea" entirely sends none of this, and generation falls back to
+  // business facts alone exactly as it did before this existed.
+  function buildProjectConcept() {
+    return PROJECT_CONCEPT_SECTIONS.map((s) => ({ label: s.label, value: narrative[s.id] ?? '' })).filter((c) =>
+      c.value.trim(),
+    );
+  }
+
   async function callGenerate(sectionsToGenerate: typeof sections, critiques?: Record<string, string>) {
     if (!opportunity) return null;
     const res = await fetch('/api/generate-narrative', {
@@ -475,6 +491,7 @@ export function ApplicationDetail() {
           eligibilityNotes: opportunity.applicantEligibilityDesc,
         },
         businessFacts: buildBusinessFacts(),
+        projectConcept: buildProjectConcept(),
         referenceAbstracts: reporterExamples.map((e) => ({ title: e.title, abstract: e.abstract })),
         targetKeywords: keywordTargets,
         critiques,
@@ -585,6 +602,7 @@ export function ApplicationDetail() {
           {SECTION_DEFS.map((s) => {
             const active = s.id === activeSection;
             let dotClass = 'bg-inferred';
+            if (s.id === 'concept') dotClass = conceptProgress.done === conceptProgress.total ? 'bg-verified' : 'bg-inferred';
             if (s.id === 'organization') dotClass = orgReadyCount === applicationFields.length ? 'bg-verified' : 'bg-inferred';
             if (s.id === 'narrative') dotClass = progress.done === progress.total ? 'bg-verified' : 'bg-inferred';
             if (s.id === 'budget') dotClass = budgetItems.length > 0 ? 'bg-verified' : 'bg-inferred';
@@ -722,10 +740,61 @@ export function ApplicationDetail() {
                 </div>
               )}
 
-              <button className="glass-btn mt-1" onClick={() => setActiveSection('organization')}>
-                Start with Organization Info
+              <button className="glass-btn mt-1" onClick={() => setActiveSection('concept')}>
+                Start with Your Idea
               </button>
               </div>
+            </div>
+          )}
+
+          {activeSection === 'concept' && (
+            <div className="flex flex-col gap-4">
+              <div className="glass-card p-6">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <ClipboardCheck className="w-4 h-4 text-accent" />
+                  <span className="text-[13px] font-bold">This program's structure</span>
+                </div>
+                <div className="text-[12px] text-ink-2 mb-3">
+                  You don't need a finished thesis — answer the questions below in plain language, and we'll
+                  help turn them into the specific structure this program's reviewers expect:{' '}
+                  <span className="font-semibold text-ink">{rubricLabel}</span>.
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {sections.map((s) => (
+                    <span
+                      key={s.id}
+                      className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-surface-2 text-ink-2"
+                    >
+                      {s.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {PROJECT_CONCEPT_SECTIONS.map((section) => {
+                const value = narrative[section.id] ?? '';
+                return (
+                  <div key={section.id} className="glass-card p-6">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={cn('w-2 h-2 rounded-full', value.trim() ? 'bg-verified' : 'bg-inferred')} />
+                      <div className="text-[14px] font-bold">{section.label}</div>
+                    </div>
+                    <p className="text-[12px] text-ink-2 leading-relaxed mb-2">{section.guidance}</p>
+                    <p className="text-[11.5px] text-ink-3 italic mb-3">{section.prompt}</p>
+                    <textarea
+                      value={value}
+                      onChange={(e) => grantId && updateNarrative(grantId, section.id, e.target.value)}
+                      rows={3}
+                      placeholder="Answer in your own words — this doesn't need to be polished."
+                      className="w-full bg-surface-2 border border-line-2 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-accent resize-y"
+                    />
+                  </div>
+                );
+              })}
+
+              <button className="glass-btn w-fit" onClick={() => setActiveSection('organization')}>
+                Continue to Organization Info
+              </button>
             </div>
           )}
 
@@ -801,6 +870,21 @@ export function ApplicationDetail() {
                 <div className="glass-card p-4 text-[12px] font-semibold text-required flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   {generateError}
+                </div>
+              )}
+
+              {conceptProgress.done === 0 && (
+                <div className="glass-card p-4 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="text-[12px] text-ink-2">
+                    <span className="font-semibold text-ink">Fill in Your Idea first</span> for a much more
+                    specific draft — right now AI drafts here only have your general business facts to go on.
+                  </div>
+                  <button
+                    className="glass-btn-outline shrink-0"
+                    onClick={() => setActiveSection('concept')}
+                  >
+                    Go to Your Idea
+                  </button>
                 </div>
               )}
 

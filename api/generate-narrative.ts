@@ -19,10 +19,21 @@ interface ReferenceAbstract {
   abstract: string;
 }
 
+interface ConceptAnswer {
+  label: string;
+  value: string;
+}
+
 interface GenerateBody {
   sections: SectionDef[];
   opportunity: { title: string; funder: string; amount: string; description: string; eligibilityNotes?: string | null };
   businessFacts: BusinessFact[];
+  /** The applicant's own plain-language answers from the "Your Idea" tab, for THIS
+   * specific application — distinct from businessFacts, which only describes the
+   * business in general. Optional and may be empty (e.g. skipped entirely), in which
+   * case drafting falls back to businessFacts alone exactly as it did before this
+   * existed. */
+  projectConcept?: ConceptAnswer[];
   referenceAbstracts?: ReferenceAbstract[];
   targetKeywords?: string[];
   /** Per-section critique from a prior alignment assessment, for a targeted rewrite. */
@@ -72,6 +83,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     .join('\n');
 
+  const conceptBlock = (body.projectConcept ?? [])
+    .map((c) => `${c.label}: ${c.value}`)
+    .join('\n');
+
   const referenceBlock = (body.referenceAbstracts ?? [])
     .slice(0, 8)
     .map((r, i) => `Reference ${i + 1} — "${r.title}":\n${r.abstract.slice(0, 1200)}`)
@@ -94,6 +109,11 @@ ${factLines || '(no facts provided)'}
 
 RULE: if a fact needed for a section is marked "REQUIRED INPUT — NOT YET PROVIDED" or simply isn't listed above, do NOT invent a plausible-sounding value. Instead write a clear bracketed placeholder in its place, e.g. "[Add specific revenue figures once available]" or "[Name of authorized representative]". Never fabricate a number, name, or claim.
 
+${
+  conceptBlock
+    ? `PROJECT CONCEPT — the applicant's own plain-language description of what they want to do for THIS application. This is the authoritative statement of intent: formalize and expand it into proper grant language in the sections below, but never contradict it. If a question below is missing (the applicant left it blank), do NOT invent specifics to fill the gap — leave a bracketed placeholder in whichever section needed it instead, same rule as for a missing business fact above.\n${conceptBlock}\n`
+    : ''
+}
 THE OPPORTUNITY being applied to:
 Title: ${body.opportunity.title}
 Funder: ${body.opportunity.funder}
