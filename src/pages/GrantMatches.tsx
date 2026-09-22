@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X, Copy, Upload, Star } from 'lucide-react';
+import { Lock, Target, Loader2, ExternalLink, CheckCircle2, FileText, Circle, Search, X, Copy, Upload, Star, Sparkles } from 'lucide-react';
 import { GrantSummaryRow } from '../components/GrantSummaryRow';
 import { useApplications } from '../context/ApplicationsContext';
 import { useOpportunities } from '../context/OpportunitiesContext';
 import { useBusinessDNA } from '../context/BusinessDNAContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
-import { ELIGIBILITY_LABELS, STRONG_MATCH_THRESHOLD } from '../lib/matching';
+import { ELIGIBILITY_LABELS, STRONG_MATCH_THRESHOLD, type BusinessProfile } from '../lib/matching';
+import { getMatchedOpportunities, type MatchedOpportunity } from '../lib/opportunities';
 import { SF424_FIELD_MAP, PROJECT_SPECIFIC_FIELDS, buildOrgInfoSnapshot } from '../data/applicationFields';
 import { buildGrantExtractionPrompt } from '../lib/prompts';
 import { compactCurrency } from '../lib/format';
@@ -39,6 +40,17 @@ export function GrantMatches() {
   const [importText, setImportText] = useState('');
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiSearching, setAiSearching] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiResults, setAiResults] = useState<MatchedOpportunity[] | null>(null);
+  const [aiSummary, setAiSummary] = useState<{ domain: string; keywords: string[] } | null>(null);
+
+  // When an AI free-text search is active, it replaces the base list everything else
+  // (category chips, the keyword search box, favorites) filters down from — so those
+  // filters keep working exactly as before, just scoped to the AI-ranked set instead of
+  // the full tenant-matched set.
+  const baseOpportunities = aiResults ?? opportunities;
 
   // "Sections" built from Grants.gov's own funding-activity-category labels present
   // in whatever's actually synced — not a hardcoded/guessed taxonomy. Demographic or
@@ -47,7 +59,7 @@ export function GrantMatches() {
   // the search box instead of a category chip here.
   const categories = useMemo(() => {
     const counts = new Map<string, { description: string; count: number }>();
-    for (const opp of opportunities) {
+    for (const opp of baseOpportunities) {
       for (const cat of opp.fundingCategories) {
         const existing = counts.get(cat.id);
         counts.set(cat.id, { description: cat.description, count: (existing?.count ?? 0) + 1 });
@@ -56,11 +68,11 @@ export function GrantMatches() {
     return Array.from(counts.entries())
       .map(([id, v]) => ({ id, ...v }))
       .sort((a, b) => b.count - a.count);
-  }, [opportunities]);
+  }, [baseOpportunities]);
 
   const categoryFiltered = activeCategory
-    ? opportunities.filter((o) => o.fundingCategories.some((c) => c.id === activeCategory))
-    : opportunities;
+    ? baseOpportunities.filter((o) => o.fundingCategories.some((c) => c.id === activeCategory))
+    : baseOpportunities;
 
   // The search box previously only triggered a live Grants.gov fetch — typing "ohio"
   // added any newly-synced opportunities to the shared cache but never actually
@@ -139,6 +151,43 @@ export function GrantMatches() {
     }
   }
 
+  async function handleAiSearch() {
+    const description = aiQuery.trim();
+    if (!description || aiSearching) return;
+    setAiSearching(true);
+    setAiError(null);
+    try {
+      const res = await fetch('/api/match-grants-freetext', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Search failed');
+      const profile: BusinessProfile = {
+        keywords: body.keywords ?? [],
+        domain: body.primaryDomain,
+        capitalRequirementMin: body.capitalRequirementMin ?? undefined,
+        state: body.state ?? undefined,
+      };
+      const matched = await getMatchedOpportunities(profile);
+      setAiResults(matched);
+      setAiSummary({ domain: body.primaryDomain, keywords: body.keywords ?? [] });
+      setSelectedId(null);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Search failed — try rephrasing.');
+    } finally {
+      setAiSearching(false);
+    }
+  }
+
+  function clearAiSearch() {
+    setAiResults(null);
+    setAiSummary(null);
+    setAiQuery('');
+    setAiError(null);
+  }
+
   return (
     <div className="panel-enter">
       {!loading && (
@@ -162,6 +211,44 @@ export function GrantMatches() {
           )}
         </div>
       )}
+      <div className="glass-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Sparkles className="w-4 h-4 text-accent" />
+          <div className="text-[13px] font-bold">Describe the grant you're looking for</div>
+        </div>
+        <div className="text-[11.5px] text-ink-2 mb-3 leading-relaxed max-w-2xl">
+          Tell us what you're after in your own words — the field, who it's for, how much you need, where
+          you're located — and we'll score every grant we have against it.
+        </div>
+        <textarea
+          value={aiQuery}
+          onChange={(e) => setAiQuery(e.target.value)}
+          placeholder="e.g. A grant to help fund an after-school arts program for underserved youth, ideally $50k or more, based in Ohio…"
+          rows={3}
+          className="w-full bg-surface border border-line-2 rounded-lg px-3.5 py-2.5 text-[13px] outline-none focus:border-accent resize-y mb-3"
+        />
+        <div className="flex items-center gap-3 flex-wrap">
+          <button className="glass-btn" onClick={handleAiSearch} disabled={aiSearching || !aiQuery.trim()}>
+            {aiSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {aiSearching ? 'Matching…' : 'Find matching grants'}
+          </button>
+          {aiResults && (
+            <button className="glass-btn-outline" onClick={clearAiSearch}>
+              <X className="w-3.5 h-3.5" />
+              Clear AI search
+            </button>
+          )}
+          {aiSummary && (
+            <span className="text-[11.5px] text-ink-3">
+              {aiResults?.length ?? 0} match{aiResults?.length === 1 ? '' : 'es'} · read as{' '}
+              <strong className="text-ink-2">{aiSummary.domain}</strong>
+              {aiSummary.keywords.length > 0 && ` · ${aiSummary.keywords.join(', ')}`}
+            </span>
+          )}
+        </div>
+        {aiError && <div className="text-[12px] text-required font-semibold mt-2.5">{aiError}</div>}
+      </div>
+
       <div className="flex items-center gap-2.5 mb-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />

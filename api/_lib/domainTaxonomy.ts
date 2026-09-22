@@ -176,6 +176,92 @@ export async function classifyTenantDomain(profileText: string): Promise<DomainC
   return classify('small business', profileText, false);
 }
 
+export interface SearchQueryClassification {
+  primaryDomain: Domain;
+  keywords: string[];
+  /** Dollar amount the query implies it needs (e.g. "at least $50k"), if any — fed into
+   * matchOpportunity's award-ceiling check the same way Growth DNA's Capital Requirement
+   * field is. Null if the query doesn't mention an amount. */
+  capitalRequirementMin: number | null;
+  /** USPS state/territory code, if the query names a location (e.g. "based in Ohio" ->
+   * "OH"). Null if none stated. */
+  state: string | null;
+}
+
+/** Turns a user's free-text description of the grant they want (typed into the "Describe
+ * the grant you're looking for" box on the Grant Matches page) into the same structured
+ * signal shape BusinessProfile (src/lib/matching.ts) expects — domain, keywords, capital
+ * need, state — so the existing deterministic matchOpportunity() scoring can run against
+ * it exactly like it already does against a tenant's Business DNA profile. This is a
+ * live AI call at search time (unlike the one-time, stored classifications above), but it
+ * only extracts structure from what the user typed — it never judges or picks grants
+ * itself, that's still matchOpportunity()'s job. One call per search, not cached — a
+ * typed query isn't a stable fact worth reusing the way a grant's or tenant's
+ * classification is. Called from api/match-grants-freetext.ts.
+ */
+export async function classifySearchQuery(query: string): Promise<SearchQueryClassification> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY not configured on server');
+
+  const prompt = `A small business or nonprofit owner is describing, in their own words, the kind of grant they're looking for. Extract structured search signal from what they wrote.
+
+Pick exactly ONE "primaryDomain" from this fixed list (use the exact string, nothing else) — the field the grant should be about. If the query doesn't clearly point to one specific field, use "${WILDCARD_DOMAIN}":
+${DOMAIN_TAXONOMY.map((d) => `- ${d}`).join('\n')}
+
+Also return 3-8 short "keywords" (lowercase, 1-3 words each) capturing the subject/audience/activity described — these get matched against grant titles and descriptions, so favor specific, substantive terms over generic ones (skip words like "grant", "funding", "business").
+
+Also return "capitalRequirementMin": a number in dollars (e.g. 50000 for "$50k") if the query states a minimum or target amount needed, otherwise 0.
+
+Also return "state": a two-letter USPS state/territory code (e.g. "OH", "WA", "PR") if the query names a specific U.S. location the applicant is based in or the grant should serve, otherwise an empty string.
+
+QUERY:
+${query.slice(0, 2000)}
+
+Return JSON: { "primaryDomain": "...", "keywords": ["...", ...], "capitalRequirementMin": <number>, "state": "<code or "">" }`;
+
+  const ai = new GoogleGenAI({ apiKey: apiKey.replace(/[^\x20-\x7E]/g, '') });
+  const response = await withRetry(() =>
+    ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            primaryDomain: { type: Type.STRING, enum: [...DOMAIN_TAXONOMY] },
+            keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+            capitalRequirementMin: { type: Type.NUMBER },
+            state: { type: Type.STRING },
+          },
+          required: ['primaryDomain', 'keywords', 'capitalRequirementMin', 'state'],
+        },
+      },
+    }),
+  );
+
+  const text_ = response.candidates?.[0]?.content?.parts?.[0]?.text ?? response.text ?? '';
+  const clean = text_.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+  const parsed = JSON.parse(clean) as {
+    primaryDomain: string;
+    keywords: string[];
+    capitalRequirementMin: number;
+    state: string;
+  };
+
+  const primaryDomain = (DOMAIN_TAXONOMY as readonly string[]).includes(parsed.primaryDomain)
+    ? (parsed.primaryDomain as Domain)
+    : WILDCARD_DOMAIN;
+  const stateCode = (parsed.state ?? '').toUpperCase().trim();
+
+  return {
+    primaryDomain,
+    keywords: (parsed.keywords ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean),
+    capitalRequirementMin: parsed.capitalRequirementMin > 0 ? parsed.capitalRequirementMin : null,
+    state: US_STATE_CODES.has(stateCode) ? stateCode : null,
+  };
+}
+
 /**
  * Classifies whichever of the given opportunity IDs don't have a domain yet — called
  * after every sync (Grants.gov, SBA.gov, manual import) so each grant gets classified
