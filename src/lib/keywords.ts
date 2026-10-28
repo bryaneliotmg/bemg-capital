@@ -45,6 +45,12 @@ export const STOPWORDS = new Set([
   'systems', 'system', 'technology', 'technologies', 'infrastructure', 'resources',
   'resource', 'management', 'development', 'solutions', 'solution', 'innovative',
   'innovation', 'strategic', 'strategy', 'digital', 'goal', 'goals', 'available',
+
+  // Words every small-business listing contains by definition. Real case: SBA's STEP
+  // program scored 78% for bEMG with "business, small, businesses" as three of its five
+  // "focus area" hits — 45 of its points came from the word "business" appearing on a
+  // small-business grant site. Specific words (marketing, brand, etc.) still count.
+  'business', 'businesses', 'small', 'company', 'companies',
 ]);
 
 export function extractKeywords(text: string, max = 25): string[] {

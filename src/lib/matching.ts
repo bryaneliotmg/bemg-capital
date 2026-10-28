@@ -127,6 +127,46 @@ function isSttr(title: string): boolean {
   return /\bSTTR\b/i.test(title) || /\bR4[12]\b/.test(title);
 }
 
+// Real case that surfaced this: SBA's State Trade Expansion Program (STEP) scored 78%
+// off a Hello Alice/SBA.gov listing whose own text says the awards go "to state and
+// territory governments" — a business can't apply for it, only use whatever services
+// its state's trade office later offers. Grants.gov rows already get this right via
+// their applicant-type codes (a government-only grant carries only 00-08 and fails
+// hasBusinessEligibility), but non-federal rows have no codes and used to clear the
+// eligibility filter by source alone. This reads the listing's own words instead:
+// "awards/grants/funds ... [are awarded/made/provided] to ... state/local/tribal/
+// territory governments". Deliberately requires the money to be directed TO a
+// government — a plain list like "small businesses, nonprofits, and local governments"
+// doesn't match, so mixed-eligibility programs still show up.
+//
+// The same SBA.gov sync turned up a second kind of listing nobody new can apply for:
+// renewals "exclusively for existing grantees" (SCORE, Boots to Business, VFPETP,
+// Portable Assistance) and host-institution solicitations limited to universities
+// (the SBDC vacancies). Those are checked here too, since they fail for the same
+// reason: the listing itself says who the money goes to, and it isn't the tenant.
+// Organization-facing programs that ARE open to new nonprofits (VBOC, WVETP, PRIME)
+// don't match any of these and still show up for nonprofit tenants.
+const CLOSED_RECIPIENT_PATTERNS: RegExp[] = [
+  /\b(?:awards?|grants?|funds|funding|financial assistance)\b(?:\s+[\w-]+){0,6}?\s+to\s+(?:the\s+)?(?:eligible\s+)?(?:state|states|territor(?:y|ies)|tribal|local|county|city|municipal)(?:\s*(?:,|and|or|&)\s*(?:state|states|territor(?:y|ies)|tribal|local|county|city|municipal))*\s+(?:governments?|agencies|entities)\b/i,
+  /\b(?:exclusively|only)\b[^.]{0,60}\b(?:existing|current)\b[^.]{0,60}\b(?:grantees?|recipients?)\b/i,
+  /\b(?:existing|current)\b[^.]{0,60}\b(?:grantees?|recipients?|recipient organizations)\s+only\b/i,
+  /\bmust be a current (?:recipient|grantee)\b/i,
+  /\bcurrently funded by (?:the\s+)?SBA\b/i,
+  /\beligible (?:entities|applicants) are (?:only |limited to )?(?:institutions of higher education|universities|colleges)\b/i,
+];
+
+function isClosedToTenants(opp: RawFundingOpportunity): boolean {
+  const text = `${opp.applicant_eligibility_desc ?? ''} ${opp.description ?? ''}`;
+  return CLOSED_RECIPIENT_PATTERNS.some((p) => p.test(text));
+}
+
+// Where a non-Grants.gov row was listed, for the "why you matched" reason — it used to
+// say "Hello Alice" for every non-federal source, including SBA.gov's own page.
+function sourceLabel(opp: RawFundingOpportunity): string {
+  if (opp.source === 'sba_gov') return 'SBA.gov';
+  return opp.agency_name || 'a small-business grant site';
+}
+
 export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessProfile): MatchResult {
   const status = opp.status ?? '';
   const codes = opp.eligibility_codes ?? [];
@@ -149,7 +189,7 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const isPendingEnrichment = isGrantsGov && opp.description === null;
   const hasBusinessEligibility = isGrantsGov
     ? isPendingEnrichment || codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c))
-    : true;
+    : !isClosedToTenants(opp);
 
   if (!isOpen || !hasBusinessEligibility) {
     return { eligible: false, matchPct: 0, reasons: [], caveats: [] };
@@ -160,7 +200,7 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   let score = 20; // base score for clearing the hard eligibility + open-status filter
 
   if (!isGrantsGov) {
-    reasons.push('Listed as a small-business opportunity on Hello Alice');
+    reasons.push(`Listed as a small-business opportunity on ${sourceLabel(opp)}`);
     score += 8;
   } else if (codes.includes('12')) {
     reasons.push('Eligible applicant type: Nonprofits with 501(c)(3) status');
