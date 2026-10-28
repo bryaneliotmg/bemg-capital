@@ -51,19 +51,39 @@ export const STOPWORDS = new Set([
   // "focus area" hits — 45 of its points came from the word "business" appearing on a
   // small-business grant site. Specific words (marketing, brand, etc.) still count.
   'business', 'businesses', 'small', 'company', 'companies',
+
+  // Everyday verbs/adjectives from mission and vision prose. Real case: bEMG's profile
+  // produced "become, actually, having, stronger, build, focus, owner, tools" as match
+  // keywords, and "build"/"focus"/"tools" alone pushed Quantum Leap Challenge Institutes
+  // and a coastal-wildlife program to 72-78% — they say nothing about what a business does.
+  'become', 'becomes', 'actually', 'having', 'stronger', 'strong', 'build', 'builds',
+  'building', 'focus', 'focused', 'focuses', 'tools', 'owner', 'owners', 'great', 'world',
+  'long', 'term', 'helps', 'helping', 'grow', 'growth', 'simply', 'every', 'real', 'best',
+  'need', 'needs', 'create', 'creating', 'ability', 'able', 'time', 'place', 'larger',
+  // Ambiguous in grant text: "service" hits "Service-Disabled Veteran" and "Forest
+  // Service", "lead" hits "lead applicant", "done" is from "done-for-you".
+  'service', 'services', 'lead', 'leads', 'done',
 ]);
 
-export function extractKeywords(text: string, max = 25): string[] {
-  const counts = new Map<string, number>();
+function countKeywords(text: string, counts: Map<string, number>, weight: number, exclude: Set<string>) {
   const words = text.toLowerCase().match(/[a-z]{4,}/g) ?? [];
   for (const w of words) {
-    if (STOPWORDS.has(w)) continue;
-    counts.set(w, (counts.get(w) ?? 0) + 1);
+    if (STOPWORDS.has(w) || exclude.has(w)) continue;
+    counts.set(w, (counts.get(w) ?? 0) + weight);
   }
+}
+
+function topKeywords(counts: Map<string, number>, max: number): string[] {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
     .map(([w]) => w);
+}
+
+export function extractKeywords(text: string, max = 25): string[] {
+  const counts = new Map<string, number>();
+  countKeywords(text, counts, 1, new Set());
+  return topKeywords(counts, max);
 }
 
 // The DNA fields that actually describe what a business does and who it serves — the
@@ -99,6 +119,28 @@ export function buildProfileText(fieldsByTab: Record<EditableTabId, DnaField[]>)
     .join(' ');
 }
 
+// The short, factual "what we do" fields. Counted 3x so they outweigh mission/vision
+// prose — real case: bEMG's several-hundred-word Vision paragraph drowned out its
+// one-line Industry ("Brand Management, AI Consulting & Web Development"), so the
+// keyword list described its aspirations instead of its actual work.
+const CORE_LABELS = new Set(['Industry', 'Products & Services', 'Market', 'Business Model']);
+const CORE_WEIGHT = 3;
+
+// The business's own name and domain aren't topical signal — "bemg" was bEMG's #2
+// keyword. Pulled from the DNA fields that hold them rather than guessed at.
+const NAME_LABELS = new Set(['Legal Name', 'Website']);
+
+const isProvided = (f: DnaField) => f.value !== 'Not yet provided' && f.value !== 'Not available';
+
 export function deriveKeywordsFromDnaFields(fieldsByTab: Record<EditableTabId, DnaField[]>): string[] {
-  return extractKeywords(buildProfileText(fieldsByTab), 20);
+  const fields = Object.values(fieldsByTab).flat().filter(isProvided);
+  const exclude = new Set(
+    fields.filter((f) => NAME_LABELS.has(f.label)).flatMap((f) => f.value.toLowerCase().match(/[a-z]{4,}/g) ?? []),
+  );
+  const counts = new Map<string, number>();
+  for (const f of fields) {
+    if (!PROFILE_LABELS.has(f.label)) continue;
+    countKeywords(f.value, counts, CORE_LABELS.has(f.label) ? CORE_WEIGHT : 1, exclude);
+  }
+  return topKeywords(counts, 20);
 }

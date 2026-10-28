@@ -264,6 +264,65 @@ function meetsRequirement(req: OwnerRequirement, groups: OwnerGroup[]): boolean 
   return req.every((g) => groups.includes(g));
 }
 
+// Local calendar date as YYYY-MM-DD, the same shape close_date is stored in.
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Grants.gov agency-code prefixes whose whole portfolio sits in one domain, checked in
+// order (more specific first). Only agencies where that's reliably true are listed —
+// e.g. DOT and HHS-ACL are left out because their grants span several domains. Names
+// must match api/_lib/domainTaxonomy.ts's DOMAINS exactly.
+const AGENCY_DOMAINS: [prefix: string, domain: string][] = [
+  ['HHS-NIH', 'Science & Technology R&D'],
+  ['HHS-FDA', 'Science & Technology R&D'],
+  ['NSF', 'Science & Technology R&D'],
+  ['NASA', 'Science & Technology R&D'],
+  ['DOD-AFRL', 'Science & Technology R&D'],
+  ['DOD-AFOSR', 'Science & Technology R&D'],
+  ['DOD-DARPA', 'Science & Technology R&D'],
+  ['DOD-ONR', 'Science & Technology R&D'],
+  ['DOD-AMC', 'Science & Technology R&D'],
+  ['DOE-ARPAE', 'Science & Technology R&D'],
+  ['DOC-NIST', 'Science & Technology R&D'],
+  ['DOD-AMRAA', 'Health & Wellness'],
+  ['HHS-CDC', 'Health & Wellness'],
+  ['HHS-HRSA', 'Health & Wellness'],
+  ['HHS-IHS', 'Health & Wellness'],
+  ['HHS-SAMHS', 'Health & Wellness'],
+  ['HHS-ACF', 'Community & Social Services'],
+  ['USDOJ', 'Public Safety & Emergency Management'],
+  ['DHS', 'Public Safety & Emergency Management'],
+  ['DOD-COE', 'Environment & Natural Resources'],
+  ['DOI', 'Environment & Natural Resources'],
+  ['DOC-DOCNOAA', 'Environment & Natural Resources'],
+  ['EPA', 'Environment & Natural Resources'],
+  ['USDA', 'Agriculture & Rural Development'],
+  ['HUD', 'Housing & Urban Development'],
+  ['IMLS', 'Arts & Culture'],
+  ['NEA', 'Arts & Culture'],
+  ['NEH', 'Arts & Culture'],
+  ['DOS', 'International & Diplomatic Affairs'],
+  ['DOL-ILAB', 'International & Diplomatic Affairs'],
+  ['DOL-ETA', 'Education & Workforce Development'],
+  ['ED', 'Education & Workforce Development'],
+  ['DOC-EDA', 'Small Business & Economic Development'],
+  ['SBA', 'Small Business & Economic Development'],
+  ['VA', 'Veterans & Military Services'],
+];
+
+function agencyDomain(agencyCode: string | null): string | null {
+  if (!agencyCode) return null;
+  const code = agencyCode.toUpperCase();
+  // "HHS-NIH" covers HHS-NIH11; a bare top-level code like "ED" only covers "ED" and
+  // "ED-…", never an unrelated code that merely starts with the same letters.
+  const hit = AGENCY_DOMAINS.find(([prefix]) =>
+    prefix.includes('-') ? code.startsWith(prefix) : code === prefix || code.startsWith(`${prefix}-`),
+  );
+  return hit ? hit[1] : null;
+}
+
 // Where a non-Grants.gov row was listed, for the "why you matched" reason — it used to
 // say "Hello Alice" for every non-federal source, including SBA.gov's own page.
 function sourceLabel(opp: RawFundingOpportunity): string {
@@ -280,7 +339,11 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   // is a small-business audience, so it clears the hard eligibility filter by source
   // alone rather than by checking codes that will always be empty.
   const isGrantsGov = opp.source === 'grants_gov';
-  const isOpen = OPEN_STATUSES.has(status);
+  // Grants.gov's status lags its own close date — 281 rows still said "posted" weeks
+  // after closing (e.g. a coastal program that closed Sept 30, still listed in late
+  // October), so the date is checked directly rather than trusting the status label.
+  const isPastClose = opp.close_date != null && opp.close_date < todayIso();
+  const isOpen = OPEN_STATUSES.has(status) && !isPastClose;
   // A freshly-synced Grants.gov "shell" row (see syncOpportunityShells() in
   // grantsSync.ts) has no eligibility_codes yet — detail hasn't been fetched. That's
   // not the same as "not business-eligible": the search query that found this row in
@@ -348,7 +411,9 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   // topical summary is at the top, so only that (plus the title) counts toward overlap.
   const DESCRIPTION_OVERLAP_WINDOW = 1200;
   const haystack = `${opp.title} ${(opp.description ?? '').slice(0, DESCRIPTION_OVERLAP_WINDOW)}`.toLowerCase();
-  const matchedKeywords = profile.keywords.filter((kw) => haystack.includes(kw));
+  // Whole words only (plus a plain plural) — substring matching let "focus" hit
+  // "focused" in 136 grants, "build" hit "building", and "media" hit "immediately".
+  const matchedKeywords = profile.keywords.filter((kw) => new RegExp(`\\b${kw}(?:s|es)?\\b`).test(haystack));
   if (matchedKeywords.length > 0) {
     reasons.push(
       `Mentions your focus area${matchedKeywords.length > 1 ? 's' : ''}: ${matchedKeywords.join(', ')}`,
@@ -374,13 +439,29 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   // against a fact on file, not a live judgment call. Skipped entirely if either side
   // hasn't been classified yet, or if either is the deliberate "General Business
   // Support" wildcard (too broad to call a mismatch).
-  if (profile.domain && opp.primary_domain) {
-    if (profile.domain === opp.primary_domain) {
-      reasons.push(`Matches your business's classified focus: ${profile.domain}`);
+  //
+  // Real case: 59% of grants (995 of 1,681) had no classification yet — the AI pass runs
+  // on a free tier of ~20/day and never catches up — and an unclassified grant skipped
+  // this check entirely, so it could never take the -30 a classified mismatch does.
+  // Unrelated NIH/NSF research grants outranked properly-classified ones for bEMG as a
+  // result. The funding agency is a stored fact that already settles the field for most
+  // of that backlog (NIH funds research, CDC funds health, Interior funds environment),
+  // so it stands in until the AI pass reaches the row. Anything still unknown after that
+  // takes a small penalty so "unchecked" can't beat "checked and matched".
+  const grantDomain = opp.primary_domain ?? agencyDomain(opp.agency_code);
+  const domainFromAgency = !opp.primary_domain && grantDomain != null;
+  if (profile.domain && !grantDomain && profile.domain !== WILDCARD_DOMAIN) {
+    caveats.push("This grant's subject area hasn't been categorized yet, so it can't be checked against your business's focus.");
+    score -= 10;
+  }
+  if (profile.domain && grantDomain) {
+    const basis = domainFromAgency ? ' (based on the funding agency)' : '';
+    if (profile.domain === grantDomain) {
+      reasons.push(`Matches your business's classified focus: ${profile.domain}${basis}`);
       score += 20;
-    } else if (profile.domain !== WILDCARD_DOMAIN && opp.primary_domain !== WILDCARD_DOMAIN) {
+    } else if (profile.domain !== WILDCARD_DOMAIN && grantDomain !== WILDCARD_DOMAIN) {
       caveats.push(
-        `This grant's primary focus (${opp.primary_domain}) doesn't match your business's classified focus (${profile.domain}) — any keyword overlap above may be coincidental, not genuine alignment.`,
+        `This grant's primary focus (${grantDomain}${basis}) doesn't match your business's classified focus (${profile.domain}) — any keyword overlap above may be coincidental, not genuine alignment.`,
       );
       score -= 30;
     }
