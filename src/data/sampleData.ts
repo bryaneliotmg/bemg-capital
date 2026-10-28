@@ -92,6 +92,10 @@ export interface DnaField {
   /** Renders as a textarea, not a single-line input — for fields meant to be a real
    * paragraph the owner writes and refines themselves, not a discrete fact. */
   multiline?: boolean;
+  /** Renders as toggle chips in edit mode instead of free text — the value is stored
+   * as the chosen option labels joined with ", ". For facts matching has to parse
+   * reliably (e.g. owner identity, see src/lib/ownerIdentity.ts), not written prose. */
+  options?: string[];
 }
 
 const EVIDENCE_LABEL: Record<EvidenceStatus, string> = {

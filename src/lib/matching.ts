@@ -82,6 +82,30 @@ export interface BusinessProfile {
    * "Headquarters City" field (see src/lib/location.ts) — not AI-inferred, since a
    * tenant's own stated address is a fact, not something worth guessing at. */
   state?: string;
+  /** Who owns the business, from Business DNA's "Majority Owner Identity" and
+   * "Certifications" fields (see src/lib/ownerIdentity.ts) — chosen from a fixed list
+   * by the owner, so like `state` this is a stated fact, not an inference. Undefined
+   * when neither field has been answered. */
+  owner?: OwnerIdentity;
+}
+
+export type OwnerGroup =
+  | 'black'
+  | 'hispanic'
+  | 'asian'
+  | 'native'
+  | 'pacific'
+  | 'minority'
+  | 'women'
+  | 'veteran'
+  | 'disabled_veteran'
+  | 'lgbtq'
+  | 'disability';
+
+export interface OwnerIdentity {
+  groups: OwnerGroup[];
+  /** False when only Certifications was answered — enough to prove a group, not to rule one out. */
+  identityAnswered: boolean;
 }
 
 // Duplicated from api/_lib/domainTaxonomy.ts's WILDCARD_DOMAIN rather than imported —
@@ -158,6 +182,86 @@ const CLOSED_RECIPIENT_PATTERNS: RegExp[] = [
 function isClosedToTenants(opp: RawFundingOpportunity): boolean {
   const text = `${opp.applicant_eligibility_desc ?? ''} ${opp.description ?? ''}`;
   return CLOSED_RECIPIENT_PATTERNS.some((p) => p.test(text));
+}
+
+// Real case that surfaced this: H&R Block's "Fund Her Future" grant on Hello Alice lists
+// its eligibility as "Women-owned businesses", but scored the same for every tenant —
+// nothing compared who a grant is for against who owns the business. Private programs
+// (corporate, foundation, Hello Alice) are where most owner-targeted grants live;
+// Grants.gov rows are skipped, since federal grants aren't restricted by race or gender
+// and their "minority"/"veteran" mentions are almost all boilerplate (632 of ~1,660).
+//
+// Each pattern needs an ownership word after the group ("-owned", "-led", "founders",
+// "entrepreneurs", "business owners", "businesses"), so "Historically Black Colleges"
+// or "veterans' families" don't read as a target. A run like "Black and Latina
+// women-owned" is captured whole, then split on the conjunctions: each piece is one way
+// to qualify, and a piece naming two groups ("Black women") needs both.
+const OWNER_GROUP_PREFIXES: Record<OwnerGroup, string> = {
+  black: 'black|african[- ]americans?',
+  hispanic: 'hispanic|latin[aoxe]s?',
+  asian: 'asian(?:[- ]americans?)?|aapi',
+  native: 'native[- ]americans?|indigenous|alaska[- ]natives?',
+  pacific: 'pacific[- ]islanders?|native[- ]hawaiians?',
+  minority: 'minority|minorities|bipoc|diverse|people of colou?r|underrepresented',
+  women: 'wom[ae]n|female|woman',
+  veteran: 'veterans?|military',
+  disabled_veteran: 'service[- ]disabled[- ]veterans?',
+  lgbtq: 'lgbtq?i?a?\\+?|queer',
+  disability: 'disabled|disability',
+};
+
+const ANY_OWNER_PREFIX = Object.values(OWNER_GROUP_PREFIXES).join('|');
+const OWNED_SUFFIX =
+  '(?:[- ](?:owned|led|founded)\\b|\\s+(?:small\\s+)?(?:founders?|entrepreneurs?|business(?:es|\\s+owners?)|owners?)\\b)';
+const OWNER_TARGET_PATTERN = new RegExp(
+  `\\b(?:${ANY_OWNER_PREFIX})(?:(?:\\s*,\\s*|\\s+|\\s*(?:,\\s*)?(?:and|or|&|/)\\s*)(?:${ANY_OWNER_PREFIX}))*${OWNED_SUFFIX}`,
+  'gi',
+);
+const OWNER_GROUP_TESTS = (Object.entries(OWNER_GROUP_PREFIXES) as [OwnerGroup, string][]).map(
+  ([group, prefix]) => [group, new RegExp(`\\b(?:${prefix})(?![\\w-]*-disabled)`, 'i')] as const,
+);
+
+// Programs that fund organizations SERVING a group (VBOC, WVETP: "for organizations
+// providing counseling ... to veteran ... business owners") name the group in their
+// eligibility text, but the applicant is the organization, not a business owned by it.
+const SERVES_GROUP_PATTERN = /\borganizations?\s+(?:that|which|providing|serving|demonstrating|delivering)\b/i;
+
+/** Each inner array is one way to qualify — every group in it is required. */
+type OwnerRequirement = OwnerGroup[];
+
+function findOwnerRequirements(text: string): OwnerRequirement[] {
+  const found: OwnerRequirement[] = [];
+  for (const match of text.matchAll(OWNER_TARGET_PATTERN)) {
+    for (const piece of match[0].split(/\s*(?:,|\band\b|\bor\b|&|\/)\s*/i)) {
+      let groups = OWNER_GROUP_TESTS.filter(([, re]) => re.test(piece)).map(([g]) => g);
+      // "service-disabled veteran" names one group, not three.
+      if (groups.includes('disabled_veteran')) groups = groups.filter((g) => g !== 'veteran' && g !== 'disability');
+      if (groups.length > 0 && !found.some((r) => r.join() === groups.join())) found.push(groups);
+    }
+  }
+  return found;
+}
+
+const OWNER_GROUP_LABELS: Record<OwnerGroup, string> = {
+  black: 'Black',
+  hispanic: 'Hispanic/Latino',
+  asian: 'Asian American',
+  native: 'Native American',
+  pacific: 'Pacific Islander',
+  minority: 'minority',
+  women: 'women',
+  veteran: 'veteran',
+  disabled_veteran: 'service-disabled veteran',
+  lgbtq: 'LGBTQ+',
+  disability: 'disability',
+};
+
+function describeRequirements(reqs: OwnerRequirement[]): string {
+  return `${reqs.map((r) => r.map((g) => OWNER_GROUP_LABELS[g]).join(' ')).join(' or ')}-owned businesses`;
+}
+
+function meetsRequirement(req: OwnerRequirement, groups: OwnerGroup[]): boolean {
+  return req.every((g) => groups.includes(g));
 }
 
 // Where a non-Grants.gov row was listed, for the "why you matched" reason — it used to
@@ -307,6 +411,38 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
         `This grant is restricted to specific states (${opp.eligible_states.join(', ')}) — add your business's location to Business DNA to see whether you qualify.`,
       );
       score -= 10;
+    }
+  }
+
+  // Owner-targeted grants (see findOwnerRequirements above). Title + eligibility text is
+  // where a program states who may apply, so a hit there is a restriction; a hit only in
+  // the description ("especially encourages women-owned businesses") is a priority, which
+  // earns a boost when the tenant fits but never a penalty when they don't. Like the
+  // state check, a restriction the tenant fails is a big drop with a caveat rather than a
+  // hard exclusion — a misread sentence shouldn't hide a grant outright.
+  if (!isGrantsGov && !SERVES_GROUP_PATTERN.test(opp.applicant_eligibility_desc ?? '')) {
+    const restricted = findOwnerRequirements(`${opp.title}. ${opp.applicant_eligibility_desc ?? ''}`);
+    const priority = restricted.length > 0 ? [] : findOwnerRequirements(haystack);
+    const owner = profile.owner;
+    if (restricted.length > 0) {
+      const who = describeRequirements(restricted);
+      if (owner && restricted.some((r) => meetsRequirement(r, owner.groups))) {
+        reasons.push(`Open to ${who} — matches your owner profile`);
+        score += 15;
+      } else if (owner?.identityAnswered) {
+        caveats.push(
+          `This grant is for ${who} — based on the owner identity in your Business DNA, you likely aren't eligible regardless of how well the keywords line up.`,
+        );
+        score -= 40;
+      } else {
+        caveats.push(
+          `This grant is for ${who} — add Majority Owner Identity in Business DNA to see whether you qualify.`,
+        );
+        score -= 10;
+      }
+    } else if (priority.length > 0 && owner && priority.some((r) => meetsRequirement(r, owner.groups))) {
+      reasons.push(`Prioritizes ${describeRequirements(priority)} — matches your owner profile`);
+      score += 10;
     }
   }
 

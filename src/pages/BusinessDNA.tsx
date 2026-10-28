@@ -6,6 +6,7 @@ import { cn } from '../lib/utils';
 import { DNA_TAB_DEFS, evidenceCaption, type DnaField, type DnaTabDef, type EvidenceStatus } from '../data/sampleData';
 import { EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { buildIdentityPrompt } from '../lib/prompts';
+import { splitOptionValue } from '../lib/ownerIdentity';
 import { useBusinessDNA, type EditableTabId } from '../context/BusinessDNAContext';
 
 const TAB_CONTENT: Record<EditableTabId, { title: string; subtitle: string }> = {
@@ -22,6 +23,56 @@ const EVIDENCE_DOT: Record<EvidenceStatus, string> = {
   required: 'bg-required',
 };
 
+// Answers that mean "none of the above" — picking one clears the rest, and picking
+// anything else clears it, so a saved value is never "Woman, Prefer not to say".
+const EXCLUSIVE_OPTIONS = new Set(['Prefer not to say', 'None']);
+
+function OptionChips({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = splitOptionValue(value);
+
+  function toggle(option: string) {
+    let next: string[];
+    if (selected.includes(option)) next = selected.filter((o) => o !== option);
+    else if (EXCLUSIVE_OPTIONS.has(option)) next = [option];
+    else next = [...selected.filter((o) => !EXCLUSIVE_OPTIONS.has(o)), option];
+    // Keep the stored order stable (the order shown), not the order clicked.
+    onChange(options.filter((o) => next.includes(o)).join(', ') || 'Not yet provided');
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((option) => {
+        const on = selected.includes(option);
+        return (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={on}
+            onClick={() => toggle(option)}
+            className={cn(
+              'flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors',
+              on
+                ? 'border-accent bg-accent text-white'
+                : 'border-line-2 bg-surface-2 text-ink-2 hover:border-accent hover:text-accent',
+            )}
+          >
+            {on && <Check className="w-3 h-3" />}
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FieldRow({
   field,
   editing,
@@ -36,7 +87,9 @@ function FieldRow({
       <div className="text-[11px] font-extrabold uppercase tracking-wide text-ink-2">{field.label}</div>
       <div>
         {editing ? (
-          field.multiline ? (
+          field.options ? (
+            <OptionChips options={field.options} value={field.value} onChange={(value) => onChange?.(value)} />
+          ) : field.multiline ? (
             <textarea
               value={field.value === 'Not yet provided' ? '' : field.value}
               onChange={(e) => onChange?.(e.target.value)}

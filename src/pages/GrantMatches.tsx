@@ -209,6 +209,7 @@ export function GrantMatches() {
         keywords: mergedKeywords,
         capitalRequirementMin: body.capitalRequirementMin ?? tenantProfile.capitalRequirementMin,
         state: body.state ?? tenantProfile.state,
+        owner: tenantProfile.owner,
       };
       const matched = await getMatchedOpportunities(profile);
       setAiResults(matched);

@@ -3,6 +3,7 @@ import { getMatchedOpportunities, searchGrants, type MatchedOpportunity } from '
 import type { BusinessProfile } from '../lib/matching';
 import { deriveKeywordsFromDnaFields, buildProfileText } from '../lib/keywords';
 import { extractStateFromLocation } from '../lib/location';
+import { CERTIFICATIONS_LABEL, OWNER_IDENTITY_LABEL, parseOwnerIdentity } from '../lib/ownerIdentity';
 import { useBusinessDNA } from './BusinessDNAContext';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -66,11 +67,20 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
   const hqField = getField('identity', 'Headquarters City');
   const tenantState =
     hqField && hqField.status !== 'required' ? extractStateFromLocation(hqField.value) ?? undefined : undefined;
+  const ownerIdentityValue = getField('identity', OWNER_IDENTITY_LABEL)?.value;
+  const certificationsValue = getField('identity', CERTIFICATIONS_LABEL)?.value;
+  const owner = parseOwnerIdentity(ownerIdentityValue, certificationsValue);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getMatchedOpportunities({ keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState });
+      const data = await getMatchedOpportunities({
+        keywords,
+        capitalRequirementMin,
+        domain: tenantDomain,
+        state: tenantState,
+        owner,
+      });
       setOpportunities(data);
       setError(null);
     } catch (err) {
@@ -79,7 +89,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState]);
+  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState, ownerIdentityValue, certificationsValue]);
 
   useEffect(() => {
     if (dnaLoading) return;
@@ -140,7 +150,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
     [load],
   );
 
-  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState };
+  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState, owner };
 
   return (
     <OpportunitiesContext.Provider

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { DnaField, EvidenceStatus, EditableTabId } from '../data/sampleData';
+import { OWNER_FIELD_OPTIONS, blankOwnerFields } from './ownerIdentity';
 
 interface DnaFieldRow {
   tab: string;
@@ -36,8 +37,15 @@ export async function fetchBusinessDnaFields(tenantId: string): Promise<Record<E
       sourceLabel: row.source_label,
       multiline: row.multiline || undefined,
       sparkline: row.sparkline || undefined,
+      options: tab === 'identity' ? OWNER_FIELD_OPTIONS[row.label] : undefined,
     });
   }
+  // The owner fields were added after most tenants' Business DNA was seeded, so they're
+  // appended here as blank rows rather than backfilled into the table — they only get
+  // written when the owner actually saves an answer. They have to live in fieldsByTab
+  // (not just render-time) because the section editor saves by index against it.
+  const present = new Set(byTab.identity.map((f) => f.label));
+  byTab.identity.push(...blankOwnerFields().filter((f) => !present.has(f.label)));
   return byTab;
 }
 
@@ -52,6 +60,11 @@ function toRow(tenantId: string, tab: EditableTabId, field: DnaField) {
     multiline: field.multiline ?? false,
     sparkline: field.sparkline ?? false,
     updated_at: new Date().toISOString(),
+    // position defaults to 0 on insert, which would jump a newly-saved owner field to
+    // the top of Identity — pinned after every seeded field instead.
+    ...(tab === 'identity' && field.label in OWNER_FIELD_OPTIONS
+      ? { position: 100 + Object.keys(OWNER_FIELD_OPTIONS).indexOf(field.label) }
+      : {}),
   };
 }
 
