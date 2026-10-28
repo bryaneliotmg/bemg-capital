@@ -12,6 +12,23 @@ export const CERTIFICATIONS_LABEL = 'Certifications';
 
 const NOT_PROVIDED = 'Not yet provided';
 
+export const OWNERSHIP_STRUCTURE_LABEL = 'Ownership Structure';
+
+/**
+ * Nonprofit vs. for-profit from the free-text "Ownership Structure" field (e.g. "Sole
+ * Proprietor", "LLC", "501(c)(3) nonprofit") — some grants state outright that
+ * for-profits can't apply. Nonprofit wording is checked first so "nonprofit
+ * corporation" isn't read as a for-profit "corporation". Undefined when it doesn't say.
+ */
+export function parseOrganizationType(value: string | undefined): 'for_profit' | 'nonprofit' | undefined {
+  if (!value || value === NOT_PROVIDED) return undefined;
+  if (/\bnon-?profit\b|\bnot[- ]for[- ]profit\b|501\s*\(?c\)?|\bcharit|\bfoundation\b/i.test(value)) return 'nonprofit';
+  if (/\bsole\s+prop|\bproprietor|\bl\.?l\.?c\b|\bcorp|\binc\b|\bincorporated\b|\bpartnership\b|\bfor[- ]profit\b|\bcompany\b|\blimited\b/i.test(value)) {
+    return 'for_profit';
+  }
+  return undefined;
+}
+
 const OWNER_IDENTITY_OPTIONS: Record<string, OwnerGroup[]> = {
   'Black / African American': ['black'],
   'Hispanic / Latino': ['hispanic'],

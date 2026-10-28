@@ -87,6 +87,9 @@ export interface BusinessProfile {
    * by the owner, so like `state` this is a stated fact, not an inference. Undefined
    * when neither field has been answered. */
   owner?: OwnerIdentity;
+  /** From Business DNA's "Ownership Structure" (see parseOrganizationType in
+   * src/lib/ownerIdentity.ts). Undefined when it hasn't been filled in or doesn't say. */
+  organizationType?: 'for_profit' | 'nonprofit';
 }
 
 export type OwnerGroup =
@@ -182,6 +185,40 @@ const CLOSED_RECIPIENT_PATTERNS: RegExp[] = [
 function isClosedToTenants(opp: RawFundingOpportunity): boolean {
   const text = `${opp.applicant_eligibility_desc ?? ''} ${opp.description ?? ''}`;
   return CLOSED_RECIPIENT_PATTERNS.some((p) => p.test(text));
+}
+
+// Real case that surfaced this: "U.S. Embassy Phnom Penh – PAS Annual Program
+// Statement" reached a Mississippi small business as a match. Its Grants.gov
+// applicant-type code is only 25 ("Others"), which clears the business filter, and the
+// AI classified its subject as Small Business & Economic Development off "economic
+// growth" and "youth entrepreneurship" — both fair readings of the topic, neither of
+// which says the work has to happen in Cambodia. State Department posts abroad fund
+// projects in their own country (55 open listings, all agency "U.S. Mission to …"), so
+// the agency itself settles it; no AI pass or text reading needed.
+function isForeignMission(opp: RawFundingOpportunity): boolean {
+  const agency = opp.agency_name ?? '';
+  return /^U\.S\. Mission to\b/i.test(agency) || /\b(?:embassy|consulate)\b/i.test(agency);
+}
+
+// Grants.gov's "Others" code puts the real eligibility in plain text, and some of it is
+// explicit: "For-profit organizations are not eligible to apply" (13 open listings).
+// Only a for-profit tenant is ruled out — nonprofits are bEMG Capital tenants too.
+// A sentence that only excludes FOREIGN for-profits doesn't count: NSF solicitations
+// routinely say "non-U.S. based for-profit organizations are not eligible" right after
+// listing U.S. for-profits as eligible (real case: PESOSE).
+const FOR_PROFIT_EXCLUDED_PATTERN =
+  /\bfor[- ]profit\s+(?:organizations?|entities|entity|businesses|companies|firms|applicants)?\s*(?:are|is)\s+(?:not\s+eligible|ineligible)\b|\bnot\s+eligible\b[^.]{0,40}\bfor[- ]profit\b/gi;
+const FOREIGN_ONLY_PATTERN = /\bnon-?U\.?S\b|\bforeign\b|\binternational\b/i;
+
+function excludesForProfits(opp: RawFundingOpportunity): boolean {
+  const text = `${opp.applicant_eligibility_desc ?? ''} ${opp.description ?? ''}`
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&(?:amp;)?nbsp;/g, ' ')
+    .replace(/\s+/g, ' ');
+  for (const match of text.matchAll(FOR_PROFIT_EXCLUDED_PATTERN)) {
+    if (!FOREIGN_ONLY_PATTERN.test(text.slice(Math.max(0, match.index - 40), match.index + 20))) return true;
+  }
+  return false;
 }
 
 // Real case that surfaced this: H&R Block's "Fund Her Future" grant on Hello Alice lists
@@ -357,8 +394,10 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const hasBusinessEligibility = isGrantsGov
     ? isPendingEnrichment || codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c))
     : !isClosedToTenants(opp);
+  const isOpenToTenant =
+    !isForeignMission(opp) && !(profile.organizationType === 'for_profit' && excludesForProfits(opp));
 
-  if (!isOpen || !hasBusinessEligibility) {
+  if (!isOpen || !hasBusinessEligibility || !isOpenToTenant) {
     return { eligible: false, matchPct: 0, reasons: [], caveats: [] };
   }
 
@@ -525,6 +564,15 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
       reasons.push(`Prioritizes ${describeRequirements(priority)} — matches your owner profile`);
       score += 10;
     }
+  }
+
+  // A for-profit tenant never reaches here for these (see isOpenToTenant above); one
+  // whose Ownership Structure is still blank gets told why it might not apply.
+  if (!profile.organizationType && excludesForProfits(opp)) {
+    caveats.push(
+      "This grant says for-profit organizations aren't eligible — add your Ownership Structure in Business DNA to see whether you qualify.",
+    );
+    score -= 10;
   }
 
   if (isSttr(opp.title)) {

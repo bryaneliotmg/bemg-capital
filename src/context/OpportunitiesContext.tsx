@@ -3,7 +3,13 @@ import { getMatchedOpportunities, searchGrants, type MatchedOpportunity } from '
 import type { BusinessProfile } from '../lib/matching';
 import { deriveKeywordsFromDnaFields, buildProfileText } from '../lib/keywords';
 import { extractStateFromLocation } from '../lib/location';
-import { CERTIFICATIONS_LABEL, OWNER_IDENTITY_LABEL, parseOwnerIdentity } from '../lib/ownerIdentity';
+import {
+  CERTIFICATIONS_LABEL,
+  OWNER_IDENTITY_LABEL,
+  OWNERSHIP_STRUCTURE_LABEL,
+  parseOrganizationType,
+  parseOwnerIdentity,
+} from '../lib/ownerIdentity';
 import { useBusinessDNA } from './BusinessDNAContext';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -70,6 +76,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
   const ownerIdentityValue = getField('identity', OWNER_IDENTITY_LABEL)?.value;
   const certificationsValue = getField('identity', CERTIFICATIONS_LABEL)?.value;
   const owner = parseOwnerIdentity(ownerIdentityValue, certificationsValue);
+  const organizationType = parseOrganizationType(getField('identity', OWNERSHIP_STRUCTURE_LABEL)?.value);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +87,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
         domain: tenantDomain,
         state: tenantState,
         owner,
+        organizationType,
       });
       setOpportunities(data);
       setError(null);
@@ -89,7 +97,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState, ownerIdentityValue, certificationsValue]);
+  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState, ownerIdentityValue, certificationsValue, organizationType]);
 
   useEffect(() => {
     if (dnaLoading) return;
@@ -150,7 +158,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
     [load],
   );
 
-  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState, owner };
+  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState, owner, organizationType };
 
   return (
     <OpportunitiesContext.Provider
