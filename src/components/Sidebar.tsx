@@ -20,7 +20,7 @@ export function Sidebar() {
   const initial = email ? email[0].toUpperCase() : 'B';
 
   return (
-    <aside className="w-64 shrink-0 bg-sidebar flex flex-col py-6 px-[18px]">
+    <aside className="w-64 shrink-0 bg-sidebar flex flex-col py-6 px-[18px] overflow-y-auto scrollarea">
       <div className="flex items-center gap-2.5 px-1.5 pb-6">
         <svg width="32" height="32" viewBox="0 0 30 30" fill="none">
           <rect width="30" height="30" rx="8" className="fill-accent" />

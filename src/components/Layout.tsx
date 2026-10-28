@@ -23,9 +23,13 @@ export function Layout() {
   const meta = getPageMeta(location.pathname);
 
   return (
-    <div className="flex min-h-screen bg-paper text-ink font-sans text-sm">
+    // A fixed-height shell, so <main> below is the thing that scrolls. It was min-h-screen
+    // before, which let <main> grow to its content and the whole window scroll instead —
+    // and since <main> still had overflow-y-auto, every `sticky` inside a page (e.g. the
+    // Grant Matches detail panel) stuck to a box that never scrolled, so never stuck.
+    <div className="flex h-screen overflow-hidden bg-paper text-ink font-sans text-sm">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <header className="sticky top-0 z-20 bg-paper/90 backdrop-blur-xl border-b border-line px-10 py-[22px] flex items-center justify-between">
           <div>
             <div className="font-serif text-[22px] font-semibold tracking-tight">{meta.title}</div>
@@ -42,7 +46,7 @@ export function Layout() {
             </button>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto scrollarea px-10 py-8 pb-16">
+        <main className="flex-1 min-h-0 overflow-y-auto scrollarea px-10 py-8 pb-16">
           <Outlet />
         </main>
       </div>

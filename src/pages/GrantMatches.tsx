@@ -482,8 +482,12 @@ export function GrantMatches() {
             })}
           </div>
 
+          {/* Pinned while the list scrolls past it. The offset is measured from the top
+              of <main>, the scroll area below the page header (see Layout.tsx), and the
+              max height is the viewport minus that header and a gap above and below —
+              anything longer scrolls inside the panel. */}
           <div
-            className="glass-card p-[26px] sticky top-[100px] overflow-y-auto scrollarea"
+            className="glass-card p-[26px] sticky top-6 overflow-y-auto scrollarea"
             style={{ maxHeight: 'calc(100vh - 140px)' }}
           >
             {selected ? (
