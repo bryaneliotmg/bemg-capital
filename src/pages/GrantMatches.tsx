@@ -211,6 +211,7 @@ export function GrantMatches() {
         state: body.state ?? tenantProfile.state,
         owner: tenantProfile.owner,
         organizationType: tenantProfile.organizationType,
+        industryText: tenantProfile.industryText,
       };
       const matched = await getMatchedOpportunities(profile);
       setAiResults(matched);

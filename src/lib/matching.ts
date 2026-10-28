@@ -90,6 +90,9 @@ export interface BusinessProfile {
   /** From Business DNA's "Ownership Structure" (see parseOrganizationType in
    * src/lib/ownerIdentity.ts). Undefined when it hasn't been filled in or doesn't say. */
   organizationType?: 'for_profit' | 'nonprofit';
+  /** The tenant's own "Industry" and "Products & Services" text, for checking grants
+   * limited to one industry (beauty brands, restaurants, ...). Undefined when blank. */
+  industryText?: string;
 }
 
 export type OwnerGroup =
@@ -129,6 +132,18 @@ export interface MatchResult {
 // plus the two nonprofit codes (12, 13), since bEMG Capital serves nonprofit tenants
 // too (e.g. arts/wellness organizations), not just for-profit small businesses.
 const BUSINESS_ELIGIBLE_CODES = new Set(['12', '13', '22', '23', '25', '99']);
+// Once a tenant's Ownership Structure says which kind of organization it is, only that
+// kind's codes count. Real case: bEMG (a sole proprietorship) had "FY 2021-2023 EDA
+// Planning" grants for cities and nonprofits as its #3-#8 matches, because the shared
+// set above let nonprofit codes 12/13 stand in for "a business can apply".
+const FOR_PROFIT_CODES = new Set(['22', '23', '25', '99']);
+const NONPROFIT_CODES = new Set(['12', '13', '25', '99']);
+
+function eligibleCodesFor(organizationType: BusinessProfile['organizationType']): Set<string> {
+  if (organizationType === 'for_profit') return FOR_PROFIT_CODES;
+  if (organizationType === 'nonprofit') return NONPROFIT_CODES;
+  return BUSINESS_ELIGIBLE_CODES;
+}
 const OPEN_STATUSES = new Set(['posted', 'forecasted']);
 
 // Bare eligibility alone (clearing the hard filter, best-case eligibility-type bonus,
@@ -143,6 +158,9 @@ const OPEN_STATUSES = new Set(['posted', 'forecasted']);
 // keyword matches (3 × 15 = 45), i.e. substantive alignment, not one lucky word.
 // Kept at a fixed, familiar 70 (already used throughout this app's UI copy).
 export const STRONG_MATCH_THRESHOLD = 70;
+
+// The highest score a grant can keep once a check concludes the tenant likely isn't eligible.
+const LIKELY_INELIGIBLE_CAP = 20;
 
 // STTR (not SBIR) statutorily requires the small business to have a formal cooperative
 // R&D partnership with a U.S. nonprofit research institution — a named co-PI there, a
@@ -221,6 +239,75 @@ function excludesForProfits(opp: RawFundingOpportunity): boolean {
   return false;
 }
 
+// The mirror case: corporate small-business grants often say "Nonprofits are not
+// eligible" (Verizon Digital Ready), or only ask for "for-profit small businesses"
+// (Breva, Freed, Seated Together) — either way a nonprofit tenant can't apply. The
+// positive form is only read from the eligibility text, where it states the rule.
+const NONPROFIT_EXCLUDED_PATTERN = /\bnon-?profits?(?:\s+organizations?)?\s+(?:are|is)\s+(?:not\s+eligible|ineligible)\b/i;
+const FOR_PROFIT_ONLY_PATTERN = /\bfor[- ]profit\s+(?:small\s+)?business(?:es)?\b/i;
+
+function excludesNonprofits(opp: RawFundingOpportunity): boolean {
+  return (
+    NONPROFIT_EXCLUDED_PATTERN.test(`${opp.applicant_eligibility_desc ?? ''} ${opp.description ?? ''}`) ||
+    FOR_PROFIT_ONLY_PATTERN.test(opp.applicant_eligibility_desc ?? '')
+  );
+}
+
+// Real case: "FY27 Small Business Development Center State of Kansas Network Rebid" was
+// bEMG's #1 match at 83% — it carries the small-business code 23, but it funds the
+// university or state agency that RUNS a state's SBDC network, not a business that uses
+// one. Same for Women's Business Center host solicitations. The SBA.gov copies of these
+// are already caught by CLOSED_RECIPIENT_PATTERNS; Grants.gov's are caught by title.
+function isSbaResourcePartnerSolicitation(opp: RawFundingOpportunity): boolean {
+  return /\bSmall Business Development Centers?\b|\bWomen'?s Business Centers?\b/i.test(opp.title);
+}
+
+// Real case: "Atlanta FY 2021 - FY 2023 EDA Planning and Local Technical Assistance"
+// still says "posted" with no close date, years after the fiscal years it names. The
+// newest year in the title is the best evidence on file of how current a listing is;
+// two or more years behind is flagged and pushed down, not hidden, since some
+// multi-year notices genuinely stay open.
+function latestTitleYear(title: string): number | null {
+  const years: number[] = [];
+  for (const m of title.matchAll(/\b(20\d{2})\b/g)) years.push(Number(m[1]));
+  for (const m of title.matchAll(/\bFY\s?-?(\d{2})\b/gi)) years.push(2000 + Number(m[1]));
+  return years.length > 0 ? Math.max(...years) : null;
+}
+
+// Programs open to one industry only, read from the title and eligibility text. Real
+// case: Sephora's $100K grant for beauty brands scored 76% for bEMG, a marketing
+// company — nothing compared the grant's industry limit with the tenant's industry.
+// Checked against the tenant's own Industry and Products & Services fields (not its
+// Market field, which names customers' industries — bEMG's lists salons and restaurants).
+const INDUSTRY_LIMITS: { label: string; grant: RegExp; tenant: RegExp }[] = [
+  {
+    label: 'beauty brands',
+    grant: /\bbeauty\s+(?:brands?|businesses|companies|founders|entrepreneurs|industry)\b/i,
+    tenant: /\b(?:beauty|cosmetic|skin\s?care|bath|body care|hair|salon|spa|nail|barber|fragrance)/i,
+  },
+  {
+    label: 'restaurants and food businesses',
+    grant: /\brestaurants?\b|\bfood (?:and beverage )?(?:businesses|brands|entrepreneurs)\b/i,
+    tenant: /\b(?:restaurant|food|culinary|cafe|café|catering|bakery|beverage|kitchen)/i,
+  },
+  {
+    label: 'manufacturers',
+    grant: /\b(?:small\s+)?manufacturers\b|\bmanufacturing (?:businesses|companies|firms)\b/i,
+    tenant: /\bmanufactur/i,
+  },
+  {
+    // Wish Local's grant is for "Black-owned brick-and-mortar businesses"; bEMG has no storefront.
+    label: 'brick-and-mortar storefronts',
+    grant: /\bbrick[- ]and[- ]mortar\b|\bstorefronts?\b/i,
+    tenant: /\b(?:store|shop|boutique|storefront|retail|salon|restaurant|barber|cafe|café|studio|clinic|bakery)/i,
+  },
+  {
+    label: 'farms and agricultural producers',
+    grant: /\bfarmers\b|\bagricultural producers\b/i,
+    tenant: /\b(?:farm|agricultur|ranch|grower)/i,
+  },
+];
+
 // Real case that surfaced this: H&R Block's "Fund Her Future" grant on Hello Alice lists
 // its eligibility as "Women-owned businesses", but scored the same for every tenant —
 // nothing compared who a grant is for against who owns the business. Private programs
@@ -239,7 +326,9 @@ const OWNER_GROUP_PREFIXES: Record<OwnerGroup, string> = {
   asian: 'asian(?:[- ]americans?)?|aapi',
   native: 'native[- ]americans?|indigenous|alaska[- ]natives?',
   pacific: 'pacific[- ]islanders?|native[- ]hawaiians?',
-  minority: 'minority|minorities|bipoc|diverse|people of colou?r|underrepresented',
+  // "women of color" names two groups at once — the women test below matches it too,
+  // so a piece like "women of color-owned" needs both (real case: HerRise MicroGrant).
+  minority: 'minority|minorities|bipoc|diverse|(?:people|wom[ae]n) of colou?r|underrepresented',
   women: 'wom[ae]n|female|woman',
   veteran: 'veterans?|military',
   disabled_veteran: 'service[- ]disabled[- ]veterans?',
@@ -391,11 +480,15 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   // pass runs, days later. description is null only for these not-yet-enriched rows
   // (every other source, and every enriched Grants.gov row, always sets it).
   const isPendingEnrichment = isGrantsGov && opp.description === null;
+  const eligibleCodes = eligibleCodesFor(profile.organizationType);
   const hasBusinessEligibility = isGrantsGov
-    ? isPendingEnrichment || codes.some((c) => BUSINESS_ELIGIBLE_CODES.has(c))
+    ? isPendingEnrichment || codes.some((c) => eligibleCodes.has(c))
     : !isClosedToTenants(opp);
   const isOpenToTenant =
-    !isForeignMission(opp) && !(profile.organizationType === 'for_profit' && excludesForProfits(opp));
+    !isForeignMission(opp) &&
+    !(isGrantsGov && isSbaResourcePartnerSolicitation(opp)) &&
+    !(profile.organizationType === 'for_profit' && excludesForProfits(opp)) &&
+    !(profile.organizationType === 'nonprofit' && excludesNonprofits(opp));
 
   if (!isOpen || !hasBusinessEligibility || !isOpenToTenant) {
     return { eligible: false, matchPct: 0, reasons: [], caveats: [] };
@@ -404,20 +497,26 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   const reasons: string[] = [];
   const caveats: string[] = [];
   let score = 20; // base score for clearing the hard eligibility + open-status filter
+  // Set by the checks below that conclude "you likely aren't eligible" (wrong state, wrong
+  // owner group, wrong industry). A -40 alone wasn't enough: Sephora's beauty-only grant
+  // still scored 61% for bEMG after its penalty, off bonuses that only matter if you can
+  // apply at all. Capped at the end so a likely-ineligible grant never outranks one the
+  // tenant can actually apply for — still listed, with the caveat saying why.
+  let likelyIneligible = false;
 
   if (!isGrantsGov) {
     reasons.push(`Listed as a small-business opportunity on ${sourceLabel(opp)}`);
     score += 8;
-  } else if (codes.includes('12')) {
+  } else if (eligibleCodes.has('12') && codes.includes('12')) {
     reasons.push('Eligible applicant type: Nonprofits with 501(c)(3) status');
     score += 8;
-  } else if (codes.includes('13')) {
+  } else if (eligibleCodes.has('13') && codes.includes('13')) {
     reasons.push('Eligible applicant type: Nonprofits without 501(c)(3) status');
     score += 6;
-  } else if (codes.includes('23')) {
+  } else if (eligibleCodes.has('23') && codes.includes('23')) {
     reasons.push('Eligible applicant type: Small businesses');
     score += 8;
-  } else if (codes.includes('22')) {
+  } else if (eligibleCodes.has('22') && codes.includes('22')) {
     reasons.push('Eligible applicant type: For-profit organizations');
     score += 5;
   } else if (codes.includes('99')) {
@@ -506,6 +605,42 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
     }
   }
 
+  // Real case: Verizon's $10K Digital Ready grant — open to any U.S. small business, and
+  // a near-perfect fit for bEMG — ranked #32, below dozens of federal listings, because
+  // everything above rewards a grant for being ABOUT the tenant's subject. A general
+  // small-business program isn't about any subject; "any industry" is the fit, so the
+  // absence of keyword overlap isn't evidence against it. Only for non-Grants.gov rows,
+  // whose whole audience is small businesses; on Grants.gov the wildcard mostly marks
+  // broad agency notices. Not for a nonprofit tenant: these are business programs, and
+  // "open to any small business" isn't a fit for an organization that isn't one.
+  if (!isGrantsGov && opp.primary_domain === WILDCARD_DOMAIN && profile.organizationType !== 'nonprofit') {
+    reasons.push('Open to small businesses in any industry — no subject-area match needed');
+    score += 25;
+  }
+
+  const titleYear = latestTitleYear(opp.title);
+  const currentYear = Number(todayIso().slice(0, 4));
+  if (titleYear != null && titleYear <= currentYear - 2) {
+    caveats.push(
+      `This listing names FY ${titleYear} and has no close date on file — it may be an old notice that was never taken down. Check the announcement before spending time on it.`,
+    );
+    score -= 30;
+  }
+
+  if (profile.industryText) {
+    const limitText = `${opp.title}. ${opp.applicant_eligibility_desc ?? ''}`;
+    for (const limit of INDUSTRY_LIMITS) {
+      if (limit.grant.test(limitText) && !limit.tenant.test(profile.industryText)) {
+        caveats.push(
+          `This program is limited to ${limit.label} — your Business DNA lists your industry as "${profile.industryText.split('\n')[0]}", so you likely aren't eligible.`,
+        );
+        score -= 40;
+        likelyIneligible = true;
+        break;
+      }
+    }
+  }
+
   // Real case that surfaced this: a Spokane, WA-specific program surfacing as a top
   // match for a Mississippi-based tenant — neither keyword overlap nor domain
   // classification has any concept of "who is this actually open to, geographically."
@@ -525,6 +660,7 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
           `This grant is restricted to ${opp.eligible_states.join(', ')} — your business is listed in ${profile.state}, so you likely aren't eligible regardless of how well the keywords line up.`,
         );
         score -= 40;
+        likelyIneligible = true;
       }
     } else {
       caveats.push(
@@ -541,7 +677,11 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
   // state check, a restriction the tenant fails is a big drop with a caveat rather than a
   // hard exclusion — a misread sentence shouldn't hide a grant outright.
   if (!isGrantsGov && !SERVES_GROUP_PATTERN.test(opp.applicant_eligibility_desc ?? '')) {
-    const restricted = findOwnerRequirements(`${opp.title}. ${opp.applicant_eligibility_desc ?? ''}`);
+    // The eligibility text wins over the title when both name groups: "SoGal Black
+    // Founder Startup Grant" reads as Black-owned, but its eligibility is Black women and
+    // Black nonbinary founders — the title is a summary, the eligibility is the rule.
+    const fromEligibility = findOwnerRequirements(opp.applicant_eligibility_desc ?? '');
+    const restricted = fromEligibility.length > 0 ? fromEligibility : findOwnerRequirements(opp.title);
     const priority = restricted.length > 0 ? [] : findOwnerRequirements(haystack);
     const owner = profile.owner;
     if (restricted.length > 0) {
@@ -554,6 +694,7 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
           `This grant is for ${who} — based on the owner identity in your Business DNA, you likely aren't eligible regardless of how well the keywords line up.`,
         );
         score -= 40;
+        likelyIneligible = true;
       } else {
         caveats.push(
           `This grant is for ${who} — add Majority Owner Identity in Business DNA to see whether you qualify.`,
@@ -581,6 +722,8 @@ export function matchOpportunity(opp: RawFundingOpportunity, profile: BusinessPr
     );
     score -= 35;
   }
+
+  if (likelyIneligible) score = Math.min(score, LIKELY_INELIGIBLE_CAP);
 
   return { eligible: true, matchPct: Math.max(0, Math.min(100, score)), reasons, caveats };
 }

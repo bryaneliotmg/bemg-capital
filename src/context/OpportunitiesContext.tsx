@@ -77,6 +77,11 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
   const certificationsValue = getField('identity', CERTIFICATIONS_LABEL)?.value;
   const owner = parseOwnerIdentity(ownerIdentityValue, certificationsValue);
   const organizationType = parseOrganizationType(getField('identity', OWNERSHIP_STRUCTURE_LABEL)?.value);
+  const industryText =
+    [getField('identity', 'Industry'), getField('operating', 'Products & Services')]
+      .filter((f) => f && f.status !== 'required' && f.value !== 'Not yet provided')
+      .map((f) => f!.value)
+      .join('\n') || undefined;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +93,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
         state: tenantState,
         owner,
         organizationType,
+        industryText,
       });
       setOpportunities(data);
       setError(null);
@@ -97,7 +103,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState, ownerIdentityValue, certificationsValue, organizationType]);
+  }, [keywords.join('|'), capitalRequirementMin, tenantDomain, tenantState, ownerIdentityValue, certificationsValue, organizationType, industryText]);
 
   useEffect(() => {
     if (dnaLoading) return;
@@ -158,7 +164,7 @@ export function OpportunitiesProvider({ children }: { children: ReactNode }) {
     [load],
   );
 
-  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState, owner, organizationType };
+  const tenantProfile: BusinessProfile = { keywords, capitalRequirementMin, domain: tenantDomain, state: tenantState, owner, organizationType, industryText };
 
   return (
     <OpportunitiesContext.Provider
