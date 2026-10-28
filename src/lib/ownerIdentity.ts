@@ -60,6 +60,21 @@ const CERTIFICATION_OPTIONS: Record<string, OwnerGroup[]> = {
   None: [],
 };
 
+// Plain-English meaning of each certification, shown on hover in Business DNA — owners
+// often hold one without knowing its acronym, or don't know which ones they could get.
+export const OPTION_HINTS: Record<string, string> = {
+  MBE: 'Minority Business Enterprise — certifies the business is at least 51% owned and run by minority U.S. citizens. Issued by a regional council of the NMSDC, or by a state or city program.',
+  WBE: "Women's Business Enterprise — certifies the business is at least 51% owned and run by women. Issued by WBENC, or by a state or city program.",
+  DBE: 'Disadvantaged Business Enterprise — a U.S. Department of Transportation certification for socially and economically disadvantaged owners, used on federally funded transportation contracts. Issued by your state DOT (in Mississippi, MDOT).',
+  '8(a)': "SBA 8(a) Business Development — a nine-year SBA program for small businesses owned by socially and economically disadvantaged people. Opens federal contracts set aside for 8(a) firms.",
+  HUBZone: 'SBA HUBZone — for small businesses based in a Historically Underutilized Business Zone, with at least 35% of employees living in one. Gets preference on federal contracts.',
+  VOSB: 'Veteran-Owned Small Business — at least 51% owned and run by veterans. Certified through SBA VetCert.',
+  SDVOSB: 'Service-Disabled Veteran-Owned Small Business — at least 51% owned and run by veterans with a service-connected disability. Certified through SBA VetCert.',
+  'WOSB / EDWOSB': 'SBA Women-Owned Small Business (and Economically Disadvantaged WOSB) — a federal contracting certification for businesses at least 51% owned and run by women.',
+  LGBTBE: 'LGBT Business Enterprise — certifies the business is at least 51% owned and run by LGBT people. Issued by the National LGBT Chamber of Commerce (NGLCC).',
+  None: 'No certifications yet. You can add them here later — many grants and contracts ask for them.',
+};
+
 const RACE_GROUPS = new Set<OwnerGroup>(['black', 'hispanic', 'asian', 'native', 'pacific']);
 
 export const OWNER_FIELD_OPTIONS: Record<string, string[]> = {

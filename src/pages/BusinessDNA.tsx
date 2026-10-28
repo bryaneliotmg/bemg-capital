@@ -6,7 +6,7 @@ import { cn } from '../lib/utils';
 import { DNA_TAB_DEFS, evidenceCaption, type DnaField, type DnaTabDef, type EvidenceStatus } from '../data/sampleData';
 import { EXTERNAL_ACQUIRE_LINKS } from '../data/applicationFields';
 import { buildIdentityPrompt } from '../lib/prompts';
-import { splitOptionValue } from '../lib/ownerIdentity';
+import { OPTION_HINTS, splitOptionValue } from '../lib/ownerIdentity';
 import { useBusinessDNA, type EditableTabId } from '../context/BusinessDNAContext';
 
 const TAB_CONTENT: Record<EditableTabId, { title: string; subtitle: string }> = {
@@ -51,22 +51,35 @@ function OptionChips({
     <div className="flex flex-wrap gap-1.5">
       {options.map((option) => {
         const on = selected.includes(option);
+        const hint = OPTION_HINTS[option];
+        const hintId = hint ? `hint-${option.replace(/[^a-z0-9]/gi, '')}` : undefined;
         return (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={on}
-            onClick={() => toggle(option)}
-            className={cn(
-              'flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors',
-              on
-                ? 'border-accent bg-accent text-white'
-                : 'border-line-2 bg-surface-2 text-ink-2 hover:border-accent hover:text-accent',
+          <span key={option} className="relative group">
+            <button
+              type="button"
+              aria-pressed={on}
+              aria-describedby={hintId}
+              onClick={() => toggle(option)}
+              className={cn(
+                'flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors',
+                on
+                  ? 'border-accent bg-accent text-white'
+                  : 'border-line-2 bg-surface-2 text-ink-2 hover:border-accent hover:text-accent',
+              )}
+            >
+              {on && <Check className="w-3 h-3" />}
+              {option}
+            </button>
+            {hint && (
+              <span
+                id={hintId}
+                role="tooltip"
+                className="pointer-events-none absolute left-0 bottom-full mb-2 z-20 w-64 rounded-lg bg-ink px-3 py-2 text-[11.5px] font-medium leading-snug text-surface shadow-lg opacity-0 translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0"
+              >
+                {hint}
+              </span>
             )}
-          >
-            {on && <Check className="w-3 h-3" />}
-            {option}
-          </button>
+          </span>
         );
       })}
     </div>
